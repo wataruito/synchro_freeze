@@ -1,4 +1,4 @@
-# PCbox-for-rodent-behavior
+# synchro_freeze
   A simple pradigm control box (board) for rodent behavior.<BR>
   
  ![Top view of the board](images/PCbox.jpg)
