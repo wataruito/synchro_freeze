@@ -29,6 +29,172 @@ start	end		duration	start	end		duration
 		%		59.58333333					65.83333333
 '''
 
+##################################################################################################
+def process_freeze(path, DEBUG):
+    
+    import matplotlib.pyplot as plt
+    import os
+    import numpy as np
+    import pandas as pd
+
+    # DEBUG = 0
+    #############################################
+    # Read CSV file containing freeze onset and offset
+    # Create Pandas DataFrame
+    # Rewrite summary.csv
+    #############################################
+    
+    # Initialize Pandas DataFrame
+    df = pd.DataFrame()
+    columnName = ['folder_videoname', 'fz_start_sub1', 'fz_end_sub1', 'fz_start_sub2', 'fz_end_sub2']
+    columnType = ['str','int_array','int_array','int_array','int_array']
+    for i in range(len(columnName)):
+        df[columnName[i]] = []
+    
+    # Search subfolders and append DF    
+    print("Step1. Reading CSV files from subfolders.")
+    for dir_name in os.listdir(path):
+        path1 = os.path.join(path, dir_name)
+        if os.path.isdir(path1): 
+            for file in os.listdir(path1):   
+                base = os.path.splitext(file)[0]
+                extn = os.path.splitext(file)[1]
+                if extn == '.csv' and base[0] !='_':
+                    filename = os.path.join(path1,file)
+                    
+                    # Read CSV file
+                    print("\tProcessing directory: {}".format(dir_name))
+                    sub1Start, sub1End, sub2Start, sub2End = read_csv(filename)
+                                        
+                    # Store in PD dataframe
+                    dir_name_base = dir_name + '_' + base
+                    df = df.append({columnName[0]:dir_name_base,
+                                              columnName[1]:sub1Start,columnName[2]:sub1End,
+                                              columnName[3]:sub2Start,columnName[4]:sub2End},
+                                               ignore_index=True)
+    
+    # Output to summary.csv
+    print("\tWriting summary.csv.")
+    write_pd2csv(path,'summary.csv', df, columnName, columnType, 1000)
+
+    #############################################
+    # Read summary.csv
+    # Compute % freezing and store in DF
+    # Output to summary1.csv
+    #############################################
+
+    # Read CSV into pandas DF
+    read_csv2pd(path,'summary.csv', df, columnName, columnType)
+    
+    # Compute % freezing and store in DF
+    print("\nStep2. Computing %_freezing.")
+
+    columnName = np.append(columnName, ['fz_sub1', 'fz_sub2', 'fz_overlap'])
+    columnType = np.append(columnType, ['float','float','float'])
+
+    sub1Freeze = np.zeros(len(df))
+    sub2Freeze = np.zeros(len(df))
+    overlapFreeze = np.zeros(len(df))
+
+    for i in range (0, len(df)):
+        subfolder = os.path.join(path, df.iloc[i,0])
+        (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap) = overlap_freezing(df.iloc[i,:], subfolder, False)
+
+    # Add columns & data
+    _df = pd.DataFrame()
+    _df[columnName[5]] = sub1Freeze
+    _df[columnName[6]] = sub2Freeze
+    _df[columnName[7]] = overlapFreeze
+    df = df.join(_df)
+    
+    # Output to summary1.csv
+    print("\tWriting summary1.csv.")
+    write_pd2csv(path,'summary1.csv', df, columnName, columnType, 1000)
+
+    #############################################
+    # Read summary1.csv
+    # Compute permutation/Cohen_D and store in DF
+    # Output to summary2.csv
+    #############################################
+
+    # Read CSV into pandas DF
+    read_csv2pd(path, 'summary1.csv', df, columnName, columnType)
+    
+    # Compute permutation/Cohen_D and store in DF
+    print("\nStep3. Computing permutation/Cohen_D and store in DF.")
+
+    columnName = np.append(columnName, ['cohen_d'])
+    columnType = np.append(columnType, ['float'])
+
+    Cohen_D = np.zeros(len(df))
+    
+    for i in range (0, len(df)):
+        subfolder = os.path.join(path, df.iloc[i,0])
+        Cohen_D[i] = permutation(df.iloc[i,:], subfolder, False)
+
+    # Add columns & data
+    _df = pd.DataFrame()
+    _df[columnName[8]] = Cohen_D
+    df = df.join(_df)
+    
+    # Output to summary2.csv
+    print("\tWriting summary2.csv.")
+    write_pd2csv(path,'summary2.csv', df, columnName, columnType, 1000)    
+
+    #############################################
+    # Read summary2.csv
+    # Compute lag times
+    # Output to summary3.csv
+    #############################################
+
+    # Read CSV into pandas DF
+    read_csv2pd(path, 'summary2.csv', df, columnName, columnType)
+    
+    # Compute permutation/Cohen_D and store in DF
+    print("\nStep4. Computing lag times.")
+
+    columnName = np.append(columnName, ['lagt_start_s1_s2','lagt_start_s2_s1','lagt_end_s1_s2','lagt_end_s2_s1'])
+    columnType = np.append(columnType, ['int_array','int_array','int_array','int_array'])
+
+    s1_s2_start = np.empty((len(df),),dtype=object)
+    s2_s1_start = np.empty((len(df),),dtype=object)
+    s1_s2_end = np.empty((len(df),),dtype=object)
+    s2_s1_end = np.empty((len(df),),dtype=object)
+    
+    for i in range (0, len(df)):
+        s1_s2_start[i],s2_s1_start[i],s1_s2_end[i],s2_s1_end[i] = lag_time(df.iloc[i,:], DEBUG=False)
+
+    # Add columns & data
+    _df = pd.DataFrame()
+    _df[columnName[9]]  = s1_s2_start
+    _df[columnName[10]] = s2_s1_start
+    _df[columnName[11]] = s1_s2_end
+    _df[columnName[12]] = s2_s1_end 
+    df = df.join(_df)
+    
+    # Output to summary2.csv
+    print("\tWriting summary3.csv.")
+    write_pd2csv(path,'summary3.csv', df, columnName, columnType, 1000)   
+    
+    
+    #############################################
+    # Debugging commands
+    if DEBUG:
+        print(df.dtypes)
+        print(df)
+        for i in range (0, len(df)):
+            for j in range (0, len(df.columns)):
+                print(type(df.iloc[i,j]))
+
+    if not DEBUG:
+        filename = os.path.join(path,'summary.csv')
+        os.remove(filename)
+        filename = os.path.join(path,'summary1.csv')
+        os.remove(filename)
+        filename = os.path.join(path,'summary2.csv')
+        os.remove(filename)        
+    return(df)
+
 ###############################################################################
 def lagtime(w1, w2, DEBUG=False):
     # Search the closest epochs from partner (w2)
@@ -71,22 +237,6 @@ def lagtime(w1, w2, DEBUG=False):
 
 
 def lag_time(df, DEBUG=False):
-
-#     s1 = df['Sub1_start'][0]
-#     s2 = df['Sub2_start'][0]
-#     s1_s2_start = lagtime(s1,s2,DEBUG) # Freezing onset from s1 mouse to s2
-
-#     s2 = df['Sub1_start'][0]
-#     s1 = df['Sub2_start'][0]
-#     s2_s1_start = lagtime(s1,s2,DEBUG) # Freezing onset from s1 mouse to s2
-
-#     s1 = df['Sub1_end'][0]
-#     s2 = df['Sub2_end'][0]
-#     s1_s2_end = lagtime(s1,s2,DEBUG) # Freezing onset from s1 mouse to s2
-
-#     s2 = df['Sub1_end'][0]
-#     s1 = df['Sub2_end'][0]
-#     s2_s1_end = lagtime(s1,s2,DEBUG) # Freezing onset from s1 mouse to s2
     
     s1 = df['fz_start_sub1']
     s2 = df['fz_start_sub2']
@@ -324,172 +474,6 @@ def permutation(df, path, output):
             _overlapFreeze, np.mean(overlapFreeze), np.std(overlapFreeze), Cohen_D))
                
     return(Cohen_D)
-##################################################################################################
-def process_freeze(path, DEBUG):
-    
-    import matplotlib.pyplot as plt
-    import os
-    import numpy as np
-    import pandas as pd
-
-    # DEBUG = 0
-    #############################################
-    # Read CSV file containing freeze onset and offset
-    # Create Pandas DataFrame
-    # Rewrite summary.csv
-    #############################################
-    
-    # Initialize Pandas DataFrame
-    df = pd.DataFrame()
-    columnName = ['folder_videoname', 'fz_start_sub1', 'fz_end_sub1', 'fz_start_sub2', 'fz_end_sub2']
-    columnType = ['str','int_array','int_array','int_array','int_array']
-    for i in range(len(columnName)):
-        df[columnName[i]] = []
-    
-    # Search subfolders and append DF    
-    print("Step1. Reading CSV files from subfolders.")
-    for dir_name in os.listdir(path):
-        path1 = os.path.join(path, dir_name)
-        if os.path.isdir(path1): 
-            for file in os.listdir(path1):   
-                base = os.path.splitext(file)[0]
-                extn = os.path.splitext(file)[1]
-                if extn == '.csv' and base[0] !='_':
-                    filename = os.path.join(path1,file)
-                    
-                    # Read CSV file
-                    print("\tProcessing directory: {}".format(dir_name))
-                    sub1Start, sub1End, sub2Start, sub2End = read_csv(filename)
-                                        
-                    # Store in PD dataframe
-                    dir_name_base = dir_name + '_' + base
-                    df = df.append({columnName[0]:dir_name_base,
-                                              columnName[1]:sub1Start,columnName[2]:sub1End,
-                                              columnName[3]:sub2Start,columnName[4]:sub2End},
-                                               ignore_index=True)
-    
-    # Output to summary.csv
-    print("\tWriting summary.csv.")
-    write_pd2csv(path,'summary.csv', df, columnName, columnType, 1000)
-
-    #############################################
-    # Read summary.csv
-    # Compute % freezing and store in DF
-    # Output to summary1.csv
-    #############################################
-
-    # Read CSV into pandas DF
-    read_csv2pd(path,'summary.csv', df, columnName, columnType)
-    
-    # Compute % freezing and store in DF
-    print("\nStep2. Computing %_freezing.")
-
-    columnName = np.append(columnName, ['fz_sub1', 'fz_sub2', 'fz_overlap'])
-    columnType = np.append(columnType, ['float','float','float'])
-
-    sub1Freeze = np.zeros(len(df))
-    sub2Freeze = np.zeros(len(df))
-    overlapFreeze = np.zeros(len(df))
-
-    for i in range (0, len(df)):
-        subfolder = os.path.join(path, df.iloc[i,0])
-        (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap) = overlap_freezing(df.iloc[i,:], subfolder, False)
-
-    # Add columns & data
-    _df = pd.DataFrame()
-    _df[columnName[5]] = sub1Freeze
-    _df[columnName[6]] = sub2Freeze
-    _df[columnName[7]] = overlapFreeze
-    df = df.join(_df)
-    
-    # Output to summary1.csv
-    print("\tWriting summary1.csv.")
-    write_pd2csv(path,'summary1.csv', df, columnName, columnType, 1000)
-
-    #############################################
-    # Read summary1.csv
-    # Compute permutation/Cohen_D and store in DF
-    # Output to summary2.csv
-    #############################################
-
-    # Read CSV into pandas DF
-    read_csv2pd(path, 'summary1.csv', df, columnName, columnType)
-    
-    # Compute permutation/Cohen_D and store in DF
-    print("\nStep3. Computing permutation/Cohen_D and store in DF.")
-
-    columnName = np.append(columnName, ['cohen_d'])
-    columnType = np.append(columnType, ['float'])
-
-    Cohen_D = np.zeros(len(df))
-    
-    for i in range (0, len(df)):
-        subfolder = os.path.join(path, df.iloc[i,0])
-        Cohen_D[i] = permutation(df.iloc[i,:], subfolder, False)
-
-    # Add columns & data
-    _df = pd.DataFrame()
-    _df[columnName[8]] = Cohen_D
-    df = df.join(_df)
-    
-    # Output to summary2.csv
-    print("\tWriting summary2.csv.")
-    write_pd2csv(path,'summary2.csv', df, columnName, columnType, 1000)    
-
-    #############################################
-    # Read summary2.csv
-    # Compute lag times
-    # Output to summary3.csv
-    #############################################
-
-    # Read CSV into pandas DF
-    read_csv2pd(path, 'summary2.csv', df, columnName, columnType)
-    
-    # Compute permutation/Cohen_D and store in DF
-    print("\nStep4. Computing lag times.")
-
-    columnName = np.append(columnName, ['lagt_start_s1_s2','lagt_start_s2_s1','lagt_end_s1_s2','lagt_end_s2_s1'])
-    columnType = np.append(columnType, ['int_array','int_array','int_array','int_array'])
-
-    s1_s2_start = np.empty((len(df),),dtype=object)
-    s2_s1_start = np.empty((len(df),),dtype=object)
-    s1_s2_end = np.empty((len(df),),dtype=object)
-    s2_s1_end = np.empty((len(df),),dtype=object)
-    
-    for i in range (0, len(df)):
-        s1_s2_start[i],s2_s1_start[i],s1_s2_end[i],s2_s1_end[i] = lag_time(df.iloc[i,:], DEBUG=False)
-
-    # Add columns & data
-    _df = pd.DataFrame()
-    _df[columnName[9]]  = s1_s2_start
-    _df[columnName[10]] = s2_s1_start
-    _df[columnName[11]] = s1_s2_end
-    _df[columnName[12]] = s2_s1_end 
-    df = df.join(_df)
-    
-    # Output to summary2.csv
-    print("\tWriting summary3.csv.")
-    write_pd2csv(path,'summary3.csv', df, columnName, columnType, 1000)   
-    
-    
-    #############################################
-    # Debugging commands
-    if DEBUG:
-        print(df.dtypes)
-        print(df)
-        for i in range (0, len(df)):
-            for j in range (0, len(df.columns)):
-                print(type(df.iloc[i,j]))
-
-    if not DEBUG:
-        filename = os.path.join(path,'summary.csv')
-        os.remove(filename)
-        filename = os.path.join(path,'summary1.csv')
-        os.remove(filename)
-        filename = os.path.join(path,'summary2.csv')
-        os.remove(filename)        
-    return(df)
-
 ##################################################################################################
 def write_pd2csv(path,filename,df,columnName,columnType,mlw=1000):
     import os
