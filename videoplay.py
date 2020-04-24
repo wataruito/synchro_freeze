@@ -4,15 +4,16 @@ import os, sys, time
 import cv2, numpy as np
 import videoplay as vp
 import math
+import pandas as pd
 
 def video_cursor(video):
     global x1,y1,x2,y2,drag,sub,click,mode,pixel_limit
     ###################################
     # Full path of the video file
-    #video = r'Z:\wataru\WD_Passport\Wataru\082216\m24a.mp4'
-    path = r'Z:\wataru\WD_Passport\Wataru\082216'
-    video = 'm24a.mp4'
-    video = os.path.join(path,video)
+    # video = r'Z:\wataru\WD_Passport\Wataru\082216\m24a.mp4'
+    #     path = r'Z:\wataru\WD_Passport\Wataru\082216'
+    #     video = 'm24a.mp4'
+    #     video = os.path.join(path,video)
 
     ###################################
     # Initialize video windows
@@ -76,8 +77,8 @@ def video_cursor(video):
     mode = 'click_mode_sub1'
 
     # prepare to store trajectory 
-    xy1 = np.array([[-1 for x in range(tots)] for y in range(2)])
-    xy2 = np.array([[-1 for x in range(tots)] for y in range(2)])
+    xy1 = np.array([[-1 for x in range(2)] for y in range(tots)])
+    xy2 = np.array([[-1 for x in range(2)] for y in range(tots)])
     ###################################
     # Main loop
     while True:
@@ -100,15 +101,15 @@ def video_cursor(video):
             vp.add_text(im, im_text, 20, 0.5)   
 
             # display cursors
-            if xy1[0,current_frame] == -1 or drag or click:
-                xy1[:,current_frame] = [x1,y1]        
-            [_x1,_y1] = xy1[:,current_frame]
+            if xy1[current_frame,0] == -1 or drag or click:
+                xy1[current_frame,:] = [x1,y1]        
+            [_x1,_y1] = xy1[current_frame,:]
             cv2.line(im,(_x1+length,_y1+length),(_x1-length,_y1-length),(0,255,0),2)
             cv2.line(im,(_x1+length,_y1-length),(_x1-length,_y1+length),(0,255,0),2)
 
-            if xy2[0,current_frame] == -1 or drag or click:
-                xy2[:,current_frame] = [x2,y2]      
-            [_x2,_y2] = xy2[:,current_frame]            
+            if xy2[current_frame,0] == -1 or drag or click:
+                xy2[current_frame,:] = [x2,y2]      
+            [_x2,_y2] = xy2[current_frame,:]            
             cv2.line(im,(_x2+length,_y2+length),(_x2-length,_y2-length),(0,0,255),2)
             cv2.line(im,(_x2+length,_y2-length),(_x2-length,_y2+length),(0,0,255),2)              
 
@@ -134,8 +135,6 @@ def video_cursor(video):
                     continue
             elif status == 'stop':
                 current_frame = cv2.getTrackbarPos('S','image')
-            elif status == 'exit':
-                break
             elif status=='prev_frame':
                 current_frame-=1
                 cv2.setTrackbarPos('S','image',current_frame)
@@ -165,13 +164,29 @@ def video_cursor(video):
                 cv2.imwrite("./"+"Snap_"+str(i)+".jpg",im)
                 print("Snap of Frame",current_frame,"Taken!")
                 status='stop'
-
+            elif status == 'exit':
+                break
+                
         except KeyError:
             print("Invalid Key was pressed")
     # Clean up windows
     cap.release()
     cv2.destroyAllWindows()
 
+    # Initialize Pandas DataFrame
+    columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y']
+    columnType = ['int','int','int','int','int']
+    frame_num = np.array([y for y in range(tots)])[np.newaxis] # Need 2D matrix to tranpose
+    frame_num = np.transpose(frame_num)
+    df = pd.DataFrame(data=np.concatenate((frame_num,xy1,xy2), axis=1), columns=columnName)
+    
+    # Output to summary.csv
+    path,filename = os.path.split(video)
+    base,ext = os.path.splitext(filename)
+
+    print("\tWriting {}".format(os.path.join(path,base+'.csv')))
+    write_pd2csv(path, base + '.csv', df, columnName, columnType, 1000)
+    
     return
 
 ###################################
@@ -234,4 +249,38 @@ def add_text(img, text, text_top, image_scale):
         fontScale=image_scale,
         color=(255, 255, 255))
     return text_top + int(5 * image_scale) 
-###################################
+##################################################################################################
+def write_pd2csv(path,filename,df,columnName,columnType,mlw=1000):
+    import os
+    import numpy as np
+    import pandas as pd
+    
+    outputFilename = os.path.join(path,filename)
+    output = open(outputFilename,"w")
+    # mlw = 1000 # max_line_width in np.array2string
+    
+    output.write(','.join(columnName)+'\n')
+
+    for i in range (0, len(df)):
+        output_str = ''
+        for j in range (0, len(columnName)):
+            # print(df.shape,j)
+            output_str = preprocess_output_str(output_str, df.iloc[i,j], columnType[j], 1000)
+        output.write(output_str[0:-1] + '\n')
+    output.close()
+    return
+    
+def preprocess_output_str(output_str, data, columnType, mlw=1000):
+    import numpy as np
+
+    if columnType == 'int_array':
+        output_str = output_str + np.array2string(data,max_line_width=mlw) + ','
+    elif columnType == 'float':
+        output_str = output_str + str(data) + ','
+    elif columnType =='str':
+        output_str = output_str + data + ','
+    elif columnType =='int':
+        output_str = output_str + str(data) + ','
+    return(output_str)
+
+##################################################################################################
