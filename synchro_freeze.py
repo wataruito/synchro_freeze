@@ -46,32 +46,34 @@ def process_freeze(path, DEBUG):
     
     # Initialize Pandas DataFrame
     df = pd.DataFrame()
-    columnName = ['folder_videoname', 'fz_start_sub1', 'fz_end_sub1', 'fz_start_sub2', 'fz_end_sub2']
-    columnType = ['str','int_array','int_array','int_array','int_array']
+    columnName = ['folder_videoname', 'single_animal', 'fz_start_sub1', 'fz_end_sub1', 'fz_start_sub2', 'fz_end_sub2']
+    columnType = ['str','str','int_array','int_array','int_array','int_array']
     for i in range(len(columnName)):
         df[columnName[i]] = []
     
     # Search subfolders and append DF    
     print("Step1. Reading CSV files from subfolders.")
     for dir_name in os.listdir(path):
-        path1 = os.path.join(path, dir_name)
-        if os.path.isdir(path1): 
-            for file in os.listdir(path1):   
-                base = os.path.splitext(file)[0]
-                extn = os.path.splitext(file)[1]
-                if extn == '.csv' and base[0] !='_':
-                    filename = os.path.join(path1,file)
-                    
-                    # Read CSV file
-                    print("\tProcessing directory: {}".format(dir_name))
-                    sub1Start, sub1End, sub2Start, sub2End = read_csv(filename)
-                                        
-                    # Store in PD dataframe
-                    dir_name_base = dir_name + '_' + base
-                    df = df.append({columnName[0]:dir_name_base,
-                                              columnName[1]:sub1Start,columnName[2]:sub1End,
-                                              columnName[3]:sub2Start,columnName[4]:sub2End},
-                                               ignore_index=True)
+        if dir_name[0:1] != "_":
+            path1 = os.path.join(path, dir_name)
+            if os.path.isdir(path1):
+                print("\tProcessing directory: {}".format(dir_name))
+                for file in os.listdir(path1):   
+                    base = os.path.splitext(file)[0]
+                    extn = os.path.splitext(file)[1]
+                    if extn == '.csv' and base[0] !='_':
+                        filename = os.path.join(path1,file)
+
+                        # Read CSV file
+                        # print(filename)
+                        single_animal,sub1Start, sub1End, sub2Start, sub2End = _read_csv(filename)
+
+                        # Store in PD dataframe
+                        dir_name_base = dir_name + '_' + base
+                        df = df.append({columnName[0]:dir_name_base, columnName[1]:single_animal,
+                                                  columnName[2]:sub1Start,columnName[3]:sub1End,
+                                                  columnName[4]:sub2Start,columnName[5]:sub2End},
+                                                   ignore_index=True)
     
     # Output to summary.csv
     print("\tWriting summary.csv.")
@@ -102,9 +104,9 @@ def process_freeze(path, DEBUG):
 
     # Add columns & data
     _df = pd.DataFrame()
-    _df[columnName[5]] = sub1Freeze
-    _df[columnName[6]] = sub2Freeze
-    _df[columnName[7]] = overlapFreeze
+    _df[columnName[6]] = sub1Freeze
+    _df[columnName[7]] = sub2Freeze
+    _df[columnName[8]] = overlapFreeze
     df = df.join(_df)
     
     # Output to summary1.csv
@@ -134,7 +136,7 @@ def process_freeze(path, DEBUG):
 
     # Add columns & data
     _df = pd.DataFrame()
-    _df[columnName[8]] = Cohen_D
+    _df[columnName[9]] = Cohen_D
     df = df.join(_df)
     
     # Output to summary2.csv
@@ -166,10 +168,10 @@ def process_freeze(path, DEBUG):
 
     # Add columns & data
     _df = pd.DataFrame()
-    _df[columnName[9]]  = s1_s2_start
-    _df[columnName[10]] = s2_s1_start
-    _df[columnName[11]] = s1_s2_end
-    _df[columnName[12]] = s2_s1_end 
+    _df[columnName[10]]  = s1_s2_start
+    _df[columnName[11]] = s2_s1_start
+    _df[columnName[12]] = s1_s2_end
+    _df[columnName[13]] = s2_s1_end 
     df = df.join(_df)
     
     # Output to summary2.csv
@@ -255,6 +257,69 @@ def lag_time(df, DEBUG=False):
     s2_s1_end = lagtime(s1,s2,DEBUG) # Freezing onset from s1 mouse to s2
 
     return(s1_s2_start, s2_s1_start, s1_s2_end, s2_s1_end)
+
+###############################################################################
+def _read_csv(filename):
+
+    # importing csv module 
+    import csv 
+
+    # csv file name 
+    # filename = "/home/wito/Dropbox/Jupyter/20190207_old_females_sync_freezing - female pair1.csv"
+    # filename = r"C:\Users\User\Desktop\project\20200419-134553\20190207_old_females_sync_freezing - female pair1.csv"
+
+    # initializing the titles and rows list 
+    fields1 = [] 
+    fields2 = [] 
+    rows = [] 
+
+    # reading csv file 
+    with open(filename, 'r') as csvfile: 
+        # creating a csv reader object 
+        csvreader = csv.reader(csvfile) 
+
+        # extracting each data row one by one 
+        for row in csvreader: 
+            rows.append(row) 
+
+    _sub1Start = []
+    _sub1End = []
+    _sub2Start = []
+    _sub2End = []
+
+    # Ignore the first two rows. Read until blank comes up
+    # Read start and end for subject1
+    # for i in range(2,len(rows)):
+    _data_start = False
+    for i in range(0,len(rows)):
+        if rows[i][0] == 'data:':
+            _data_start = True
+        elif _data_start:
+            if rows[i][1] == '':
+                break
+            # print(i)
+            _sub1Start.append(int(rows[i][1]))
+            _sub1End.append(int(rows[i][2]))
+
+    # Read start and end for subject2
+    _data_start = False
+    for i in range(0,len(rows)):
+        if rows[i][0] == 'data:':
+            _data_start = True
+        elif _data_start:
+            if rows[i][4] == '':
+                break
+            _sub2Start.append(int(rows[i][4]))
+            _sub2End.append(int(rows[i][5]))
+
+    # convert to numpy array
+    import numpy as np
+    sub1Start = np.array(_sub1Start)
+    sub1End = np.array(_sub1End)
+    sub2Start = np.array(_sub2Start)
+    sub2End = np.array(_sub2End)
+        
+    return (single_animal,sub1Start,sub1End,sub2Start,sub2End)
 
 ###############################################################################
 def read_csv(filename):

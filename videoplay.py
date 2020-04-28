@@ -66,6 +66,8 @@ def video_cursor(video):
     r = 3
     dim = (x_pixcels*r, y_pixcels*r)
 
+    print("total frame number: {}".format(tots))
+    
     length = 5 # cross cursor length
 
     # Mouse events handler (global)
@@ -84,7 +86,8 @@ def video_cursor(video):
     while True:
         try:
             # If reach to the end, play from the begining
-            if current_frame==tots-1:
+            #if current_frame==tots-1:
+            if current_frame==tots:
                 current_frame=0
 
             # read a frame
@@ -185,7 +188,7 @@ def video_cursor(video):
     base,ext = os.path.splitext(filename)
 
     print("\tWriting {}".format(os.path.join(path,base+'.csv')))
-    write_pd2csv(path, base + '.csv', df, columnName, columnType, 1000)
+    write_pd2csv(path, '_' + base + '_track.csv', df, columnName, columnType, 1000)
     
     return
 
