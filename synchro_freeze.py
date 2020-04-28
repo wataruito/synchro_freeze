@@ -3,30 +3,36 @@
 File format for the csv file:
 Currently frame number and sec appear together. Need to clean up.
 
-animal1						animal2		
-start	end		duration	start	end		duration
-256		271		4			256		340		21.25
-273		276		1			389		394		1.5
-278		340		15.75		410		424		3.75
-365		385		5.25		431		448		4.5
-455		459		1.25		452		459		2
-465		491		6.75		465		491		6.75
-509		518		2.5			493		505		3.25
-531		549		4.75		523		533		2.75
-552		558		1.75		543		558		4
-560		564		1.25		563		582		5
-567		589		5.75		586		589		1
-597		603		1.75		592		599		2
-607		637		7.75		603		619		4.25
-651		660		2.5			623		635		3.25
-664		688		6.25		642		651		2.5
-699		711		3.25		654		661		2
-							665		673		2.25
-							677		696		5
-							701		708		2
-					
-	total (s)	71.5						79
-		%		59.58333333					65.83333333
+dir:			20191015
+old_dir:		101519
+exp_id:			m38
+single_animal:	TRUE (optional)
+comment:		m38	muscimole, SINGLE
+
+data:	start	end		duration	start	end		duration
+		256		271		4			256		340		21.25
+		273		276		1			389		394		1.5
+		278		340		15.75		410		424		3.75
+		365		385		5.25		431		448		4.5
+		455		459		1.25		452		459		2
+		465		491		6.75		465		491		6.75
+		509		518		2.5			493		505		3.25
+		531		549		4.75		523		533		2.75
+		552		558		1.75		543		558		4
+		560		564		1.25		563		582		5
+		567		589		5.75		586		589		1
+		597		603		1.75		592		599		2
+		607		637		7.75		603		619		4.25
+		651		660		2.5			623		635		3.25
+		664		688		6.25		642		651		2.5
+		699		711		3.25		654		661		2
+									665		673		2.25
+									677		696		5
+									701		708		2
+
+comment:	total (s)	71.5						79
+			%			59.58333333					65.83333333
+end:
 '''
 
 ##################################################################################################
@@ -53,11 +59,12 @@ def process_freeze(path, DEBUG):
     
     # Search subfolders and append DF    
     print("Step1. Reading CSV files from subfolders.")
+    print("\tProcessing directory: ", end = " ")
     for dir_name in os.listdir(path):
         if dir_name[0:1] != "_":
             path1 = os.path.join(path, dir_name)
             if os.path.isdir(path1):
-                print("\tProcessing directory: {}".format(dir_name))
+                print("{}, ".format(dir_name), end = " ")
                 for file in os.listdir(path1):   
                     base = os.path.splitext(file)[0]
                     extn = os.path.splitext(file)[1]
@@ -74,6 +81,7 @@ def process_freeze(path, DEBUG):
                                                   columnName[2]:sub1Start,columnName[3]:sub1End,
                                                   columnName[4]:sub2Start,columnName[5]:sub2End},
                                                    ignore_index=True)
+    print("completed.")
     
     # Output to summary.csv
     print("\tWriting summary.csv.")
@@ -101,7 +109,10 @@ def process_freeze(path, DEBUG):
     for i in range (0, len(df)):
         subfolder = os.path.join(path, df.iloc[i,0])
         (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap) = overlap_freezing(df.iloc[i,:], subfolder, False)
-
+        if df['single_animal'][i] == 'TRUE':
+            sub2Freeze[i] = "nan"
+            overlapFreeze[i] = "nan"
+            
     # Add columns & data
     _df = pd.DataFrame()
     _df[columnName[6]] = sub1Freeze
@@ -124,16 +135,22 @@ def process_freeze(path, DEBUG):
     
     # Compute permutation/Cohen_D and store in DF
     print("\nStep3. Computing permutation/Cohen_D and store in DF.")
-
+    print("\tProcessing column: ", end = " ")
     columnName = np.append(columnName, ['cohen_d'])
     columnType = np.append(columnType, ['float'])
 
     Cohen_D = np.zeros(len(df))
     
     for i in range (0, len(df)):
-        subfolder = os.path.join(path, df.iloc[i,0])
-        Cohen_D[i] = permutation(df.iloc[i,:], subfolder, False)
-
+        print("{}/{}, ".format(i,len(df)), end=" ")
+        if df['single_animal'][i] == 'TRUE' or df['fz_start_sub1'][i].size == 0 or df['fz_start_sub2'][i].size == 0:
+            #print("hit!")
+            Cohen_D[i] = "nan"
+        else:
+            subfolder = os.path.join(path, df.iloc[i,0])
+            Cohen_D[i] = permutation(df.iloc[i,:], subfolder, False)                                  
+    print("completed.")
+            
     # Add columns & data
     _df = pd.DataFrame()
     _df[columnName[9]] = Cohen_D
@@ -164,7 +181,11 @@ def process_freeze(path, DEBUG):
     s2_s1_end = np.empty((len(df),),dtype=object)
     
     for i in range (0, len(df)):
-        s1_s2_start[i],s2_s1_start[i],s1_s2_end[i],s2_s1_end[i] = lag_time(df.iloc[i,:], DEBUG=False)
+        if df['single_animal'][i] == 'TRUE' or df['fz_start_sub1'][i].size == 0 or df['fz_start_sub2'][i].size == 0:
+            #print("hit!")
+            s1_s2_start[i],s2_s1_start[i],s1_s2_end[i],s2_s1_end[i] = np.array([]),np.array([]),np.array([]),np.array([])
+        else:
+            s1_s2_start[i],s2_s1_start[i],s1_s2_end[i],s2_s1_end[i] = lag_time(df.iloc[i,:], DEBUG=False)
 
     # Add columns & data
     _df = pd.DataFrame()
@@ -286,8 +307,13 @@ def _read_csv(filename):
     _sub1End = []
     _sub2Start = []
     _sub2End = []
-
-    # Ignore the first two rows. Read until blank comes up
+    
+    # Detect single or pair freezing
+    single_animal = 'FALSE'
+    for i in range(0,len(rows)):
+        if rows[i][0] == 'single_animal:':
+            single_animal = rows[i][1] 
+    
     # Read start and end for subject1
     # for i in range(2,len(rows)):
     _data_start = False
@@ -391,10 +417,10 @@ def overlap_freezing (df, path, output):
     import os
     import numpy as np
 
-    sub1Start = df[1]
-    sub1End = df[2]
-    sub2Start = df[3]
-    sub2End = df[4]
+    sub1Start = df[2]
+    sub1End = df[3]
+    sub2Start = df[4]
+    sub2End = df[5]
     
     filename = os.path.join(path,'overlap_fig.eps')
         
