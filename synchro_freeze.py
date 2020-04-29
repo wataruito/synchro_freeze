@@ -53,7 +53,7 @@ def process_freeze(path, DEBUG):
     # Initialize Pandas DataFrame
     df = pd.DataFrame()
     columnName = ['folder_videoname', 'single_animal', 'fz_start_sub1', 'fz_end_sub1', 'fz_start_sub2', 'fz_end_sub2']
-    columnType = ['str','str','int_array','int_array','int_array','int_array']
+    columnType = ['str','bool','int_array','int_array','int_array','int_array']
     for i in range(len(columnName)):
         df[columnName[i]] = []
     
@@ -94,7 +94,7 @@ def process_freeze(path, DEBUG):
     #############################################
 
     # Read CSV into pandas DF
-    read_csv2pd(path,'summary.csv', df, columnName, columnType)
+    df = read_csv2pd(path,'summary.csv', columnName, columnType)
     
     # Compute % freezing and store in DF
     print("\nStep2. Computing %_freezing.")
@@ -131,7 +131,7 @@ def process_freeze(path, DEBUG):
     #############################################
 
     # Read CSV into pandas DF
-    read_csv2pd(path, 'summary1.csv', df, columnName, columnType)
+    df = read_csv2pd(path, 'summary1.csv', columnName, columnType)
     
     # Compute permutation/Cohen_D and store in DF
     print("\nStep3. Computing permutation/Cohen_D and store in DF.")
@@ -167,7 +167,7 @@ def process_freeze(path, DEBUG):
     #############################################
 
     # Read CSV into pandas DF
-    read_csv2pd(path, 'summary2.csv', df, columnName, columnType)
+    df = read_csv2pd(path, 'summary2.csv', columnName, columnType)
     
     # Compute permutation/Cohen_D and store in DF
     print("\nStep4. Computing lag times.")
@@ -591,7 +591,7 @@ def preprocess_output_str(output_str, data, columnType, mlw=1000):
 
     if columnType == 'int_array':
         output_str = output_str + np.array2string(data,max_line_width=mlw) + ','
-    elif columnType == 'float':
+    elif columnType == 'float' or columnType == 'bool':
         output_str = output_str + str(data) + ','
     elif columnType =='str':
         output_str = output_str + data + ','
@@ -599,7 +599,7 @@ def preprocess_output_str(output_str, data, columnType, mlw=1000):
     return(output_str)
 
 ##################################################################################################
-def read_csv2pd(path,filename,df,columnName,columnType):
+def read_csv2pd(path,filename,columnName,columnType):
     import os
     import numpy as np
     import pandas as pd
@@ -607,11 +607,12 @@ def read_csv2pd(path,filename,df,columnName,columnType):
     inputFilename = os.path.join(path,filename)
 
     df = pd.read_csv(inputFilename,index_col=False)
-
+    df = df.astype(object) # Need to convert object to set numpy array in a cell
+        
     # Post process from str to array
     for i in range (0, len(df)):
         for j in range (0, len(df.columns)):
-            if columnName[j] == 'int_array':
+            if columnType[j] == 'int_array':
                 df.iloc[i,j] = np.fromstring(df.iloc[i,j][1:-1],dtype=int,sep=' ')
 
     return(df)

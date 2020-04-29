@@ -2,7 +2,6 @@
 # https://github.com/maximus009/VideoPlayer
 import os, sys, time
 import cv2, numpy as np
-import videoplay as vp
 import math
 import pandas as pd
 
@@ -26,9 +25,9 @@ def video_cursor(video):
     # Get the total number of frame
     tots = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     # Add two trackbars
-    cv2.createTrackbar('S','image', 0, int(tots)-1, vp.flick)
+    cv2.createTrackbar('S','image', 0, int(tots)-1, flick)
     cv2.setTrackbarPos('S','image',0)
-    cv2.createTrackbar('F','image', 1, 100, vp.flick)
+    cv2.createTrackbar('F','image', 1, 100, flick)
     frame_rate = 30
     cv2.setTrackbarPos('F','image',frame_rate)
 
@@ -76,11 +75,18 @@ def video_cursor(video):
     click = False
     sub = 'sub1'
     pixel_limit = 10.0
-    mode = 'click_mode_sub1'
+    mode = 'drag_mode'
 
-    # prepare to store trajectory 
-    xy1 = np.array([[-1 for x in range(2)] for y in range(tots)])
-    xy2 = np.array([[-1 for x in range(2)] for y in range(tots)])
+    # prepare to store trajectory
+    path,filename = os.path.split(video)
+    base,ext = os.path.splitext(filename)
+    filename = '_' + base + '_track.csv'
+    
+    if os.path.exists(os.path.join(path,filename)):
+        xy1, xy2 = read_trajectory(video)
+    else:
+        xy1 = np.array([[-1 for x in range(2)] for y in range(tots)])
+        xy2 = np.array([[-1 for x in range(2)] for y in range(tots)])
     ###################################
     # Main loop
     while True:
@@ -101,17 +107,19 @@ def video_cursor(video):
             im_text = "video_status: " + status + ", frame_rate: " + \
                     str(realFrameRate) + " fps, mode: " + mode
 
-            vp.add_text(im, im_text, 20, 0.5)   
+            add_text(im, im_text, 20, 0.5)   
 
             # display cursors
             if xy1[current_frame,0] == -1 or drag or click:
-                xy1[current_frame,:] = [x1,y1]        
+                xy1[current_frame,:] = [x1,y1]
+            [x1,y1] = xy1[current_frame,:]    
             [_x1,_y1] = xy1[current_frame,:]
             cv2.line(im,(_x1+length,_y1+length),(_x1-length,_y1-length),(0,255,0),2)
             cv2.line(im,(_x1+length,_y1-length),(_x1-length,_y1+length),(0,255,0),2)
 
             if xy2[current_frame,0] == -1 or drag or click:
-                xy2[current_frame,:] = [x2,y2]      
+                xy2[current_frame,:] = [x2,y2]
+            [x2,y2] = xy2[current_frame,:]
             [_x2,_y2] = xy2[current_frame,:]            
             cv2.line(im,(_x2+length,_y2+length),(_x2-length,_y2-length),(0,0,255),2)
             cv2.line(im,(_x2+length,_y2-length),(_x2-length,_y2+length),(0,0,255),2)              
@@ -176,6 +184,50 @@ def video_cursor(video):
     cap.release()
     cv2.destroyAllWindows()
 
+    write_trajectory(tots,xy1,xy2,video)
+    
+    return
+
+##################################################################################################
+def read_trajectory(video):
+    import os
+
+    columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y']
+    columnType = ['int','int','int','int','int']
+
+    path,filename = os.path.split(video)
+    base,ext = os.path.splitext(filename)
+    filename = '_' + base + '_track.csv'
+    
+    print("\tReading {}".format(filename))
+
+    df = read_csv2pd(path,filename,columnName,columnType)
+    # xy1 = [df['sub1_x'], df['sub1_y']]
+    xy1=df[['sub1_x', 'sub1_y']].to_numpy()
+    xy2=df[['sub2_x', 'sub2_y']].to_numpy()
+
+    return(xy1,xy2)
+###################################
+def read_csv2pd(path,filename,columnName,columnType):
+    import os
+    import numpy as np
+    import pandas as pd
+
+    inputFilename = os.path.join(path,filename)
+
+    df = pd.read_csv(inputFilename,index_col=False)
+    df = df.astype(object) # Need to convert object to set numpy array in a cell
+        
+    # Post process from str to array
+    for i in range (0, len(df)):
+        for j in range (0, len(df.columns)):
+            if columnType[j] == 'int_array':
+                df.iloc[i,j] = np.fromstring(df.iloc[i,j][1:-1],dtype=int,sep=' ')
+
+    return(df)
+
+##################################################################################################
+def write_trajectory(tots,xy1,xy2,video):
     # Initialize Pandas DataFrame
     columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y']
     columnType = ['int','int','int','int','int']
@@ -186,9 +238,10 @@ def video_cursor(video):
     # Output to summary.csv
     path,filename = os.path.split(video)
     base,ext = os.path.splitext(filename)
+    filename = '_' + base + '_track.csv'
 
-    print("\tWriting {}".format(os.path.join(path,base+'.csv')))
-    write_pd2csv(path, '_' + base + '_track.csv', df, columnName, columnType, 1000)
+    print("\tWriting {}".format(filename))
+    write_pd2csv(path, filename, df, columnName, columnType, 1000)
     
     return
 
