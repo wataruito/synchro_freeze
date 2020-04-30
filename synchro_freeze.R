@@ -1,6 +1,8 @@
-conv_str2list <- function(df) {
+conv_str2list <- function(df,rex) {
+    library(stringr)
+    
     # Convert strings to integer list
-    for (colname in str_subset(names(df), "lagt_*")){
+    for (colname in str_subset(names(df), rex)){
         # Generate working column
         w_colname = paste0("w_", colname)
         df[,w_colname] = NA

@@ -113,16 +113,16 @@ def video_cursor(video):
             if xy1[current_frame,0] == -1 or drag or click:
                 xy1[current_frame,:] = [x1,y1]
             [x1,y1] = xy1[current_frame,:]    
-            [_x1,_y1] = xy1[current_frame,:]
-            cv2.line(im,(_x1+length,_y1+length),(_x1-length,_y1-length),(0,255,0),2)
-            cv2.line(im,(_x1+length,_y1-length),(_x1-length,_y1+length),(0,255,0),2)
+            # [_x1,_y1] = xy1[current_frame,:]
+            cv2.line(im,(x1+length,y1+length),(x1-length,y1-length),(0,255,0),2)
+            cv2.line(im,(x1+length,y1-length),(x1-length,y1+length),(0,255,0),2)
 
             if xy2[current_frame,0] == -1 or drag or click:
                 xy2[current_frame,:] = [x2,y2]
             [x2,y2] = xy2[current_frame,:]
-            [_x2,_y2] = xy2[current_frame,:]            
-            cv2.line(im,(_x2+length,_y2+length),(_x2-length,_y2-length),(0,0,255),2)
-            cv2.line(im,(_x2+length,_y2-length),(_x2-length,_y2+length),(0,0,255),2)              
+            # [_x2,_y2] = xy2[current_frame,:]            
+            cv2.line(im,(x2+length,y2+length),(x2-length,y2-length),(0,0,255),2)
+            cv2.line(im,(x2+length,y2-length),(x2-length,y2+length),(0,0,255),2)              
 
             # show video frame
             cv2.imshow('image', im)
