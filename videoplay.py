@@ -5,17 +5,35 @@ import cv2, numpy as np
 import math
 import pandas as pd
 
+"""
+Keyboard controls:
+    <Video control>
+    w: start palying
+    s: stop playing
+    a: step back a frame
+    d: step forward a frame
+    q: play faster
+    e: play slower
+
+    <Tracking>
+    0: drug mode
+    1: sub1 click mode
+    2: sub2 click mode
+
+    <Freezing>
+    !: target sub1
+    @: target sub2
+    j: start freezing
+    k: end freezing
+"""
+
+
 def video_cursor(video):
     global x1,y1,x2,y2,drag,sub,click,mode,pixel_limit
-    ###################################
-    # Full path of the video file
-    # video = r'Z:\wataru\WD_Passport\Wataru\082216\m24a.mp4'
-    #     path = r'Z:\wataru\WD_Passport\Wataru\082216'
-    #     video = 'm24a.mp4'
-    #     video = os.path.join(path,video)
 
     ###################################
     # Initialize video windows
+
     cv2.namedWindow('image')
     cv2.moveWindow('image',250,150)
     # Set mouse callback
@@ -31,25 +49,39 @@ def video_cursor(video):
     frame_rate = 30
     cv2.setTrackbarPos('F','image',frame_rate)
 
-    ###################################
-    # Initialize contol window
-    #cv2.namedWindow('controls')
-    #cv2.moveWindow('controls',250,50)
+    ##################################
+    # Initialize freeze indicator window for each subject
 
-    # Generate image (controls, 50 x 750) from text and display in the control window
-    #controls = np.zeros((50,750),np.uint8)
-    #cv2.putText(controls, "W/w: Play, S/s: Stop, A/a: Prev_Frame, D/d: Next_Frame, E/e: Faster, Q/q: Slower, Esc: Exit",
-    #            (20,30), cv2.FONT_HERSHEY_SIMPLEX, 0.45, 255)
-    #cv2.imshow("controls",controls)
+    sub_freeze = ['sub1_freeze','sub2_freeze']
+    
+    cv2.namedWindow(sub_freeze[0])
+    cv2.moveWindow(sub_freeze[0],250,50)
+
+    cv2.namedWindow(sub_freeze[1])
+    cv2.moveWindow(sub_freeze[1],600,50)
+
+    # Create new blank image
+    # freeze
+    width, height = 200, 50
+    red = (255, 0, 0)
+    freeze_sign = create_blank(width, height, rgb_color=red)
+    cv2.putText(freeze_sign, "Freeze", (40,35), cv2.FONT_HERSHEY_DUPLEX, 1.0, 255)
+    # no_freeze
+    green = (0, 255, 0)
+    no_freeze_sign = create_blank(width, height, rgb_color=green)
+    cv2.putText(no_freeze_sign, "No_freeze", (20,35), cv2.FONT_HERSHEY_DUPLEX, 1.0, 255)
 
     ###################################
+    
     status_list = { ord('s'):'stop',
                     ord('w'):'play',
                     ord('a'):'prev_frame', ord('d'):'next_frame',
                     ord('q'):'slow', ord('e'):'fast',
                     ord(' '):'snap',
                     ord('0'):'drag_mode',ord('1'):'click_mode_sub1',ord('2'):'click_mode_sub2',
-                    -1:'no_key_press', 
+                    ord('!'):'target_sub1',ord('@'):'target_sub2',
+                    ord('j'):'start_freezing',ord('k'):'end_freezing',
+                   -1:'no_key_press', 
                     27:'exit'}
     current_frame = 0
     status = 'stop'
@@ -77,17 +109,26 @@ def video_cursor(video):
     pixel_limit = 10.0
     mode = 'drag_mode'
 
-    # prepare to store trajectory
+    # prepare to store freezing
+    target_freeze = -1
+    freeze_state = False
+    freeze_modify = False
+    freeze_modify_on_frame = -1
+    freeze_modify_off_frame = -1
+    
+    # prepare to store trajectory and freezing
     path,filename = os.path.split(video)
     base,ext = os.path.splitext(filename)
-    filename = '_' + base + '_track.csv'
+    filename = '_' + base + '_track_freeze.csv'
     
     if os.path.exists(os.path.join(path,filename)):
-        xy1, xy2 = read_trajectory(video)
+        xy1, xy2, freeze = read_trajectory(video)
     else:
         xy1 = np.array([[-1 for x in range(2)] for y in range(tots)])
         xy2 = np.array([[-1 for x in range(2)] for y in range(tots)])
-    ###################################
+        freeze = np.array([[False for x in range(2)] for y in range(tots)])
+        
+    ######################################################################
     # Main loop
     while True:
         try:
@@ -105,10 +146,13 @@ def video_cursor(video):
 
             # put current state and real frame rate in the image
             im_text = "video_status: " + status + ", frame_rate: " + \
-                    str(realFrameRate) + " fps, mode: " + mode
+                    str(realFrameRate) + " fps, mode: " + mode + \
+                    ", target_freeze: " + str(target_freeze+1) + \
+                    ", freeze_modify: " + str(freeze_modify)
 
-            add_text(im, im_text, 20, 0.5)   
-
+            add_text(im, im_text, 20, 0.5)
+            
+            ###################################
             # display cursors
             if xy1[current_frame,0] == -1 or drag or click:
                 xy1[current_frame,:] = [x1,y1]
@@ -124,9 +168,41 @@ def video_cursor(video):
             cv2.line(im,(x2+length,y2+length),(x2-length,y2-length),(0,0,255),2)
             cv2.line(im,(x2+length,y2-length),(x2-length,y2+length),(0,0,255),2)              
 
+            
+            ###################################
+            # display freezing state
+            
+            if freeze_modify_on_frame == current_frame:
+                if target_freeze == -1:
+                    freeze_modify_on_frame = -1
+                else:
+                    freeze_modify = True
+            
+            if freeze_modify_off_frame == current_frame:
+                if freeze_modify == True:
+                    freeze_modify = False
+                    for i in range (freeze_modify_on_frame, freeze_modify_off_frame + 1): 
+                        freeze[i,target_freeze] = True
+                
+                    freeze_modify_on_frame = -1
+                    freeze_modify_off_frame = -1
+
+            for i in range(2):    
+                if freeze_modify and target_freeze == i:
+                    #print(i)
+                    cv2.imshow(sub_freeze[i],freeze_sign)    
+                elif freeze[current_frame,i] == True:
+                    cv2.imshow(sub_freeze[i],freeze_sign)
+                else:                
+                    cv2.imshow(sub_freeze[i],no_freeze_sign)
+
+            
+            ###################################
             # show video frame
             cv2.imshow('image', im)
-
+            
+            
+            ###################################
             # Read key input
             status_new = status_list[cv2.waitKey(1)]
 
@@ -171,6 +247,20 @@ def video_cursor(video):
             elif status=='click_mode_sub2':
                 mode = 'click_mode_sub2'
                 status=status_pre
+            elif status=='target_sub1':
+                target_freeze = 0
+                status=status_pre
+            elif status=='target_sub2':
+                target_freeze = 1
+                status=status_pre
+            elif status=='start_freezing':
+                # freeze_state = True
+                freeze_modify_on_frame = current_frame
+                status=status_pre
+            elif status=='end_freezing':
+                # freeze_state = False
+                freeze_modify_off_frame = current_frame
+                status=status_pre            
             elif status=='snap':
                 cv2.imwrite("./"+"Snap_"+str(i)+".jpg",im)
                 print("Snap of Frame",current_frame,"Taken!")
@@ -184,20 +274,84 @@ def video_cursor(video):
     cap.release()
     cv2.destroyAllWindows()
 
-    write_trajectory(tots,xy1,xy2,video)
+    # write file for trajectory and freezing
+    write_trajectory(tots,xy1,xy2,freeze,video)
     
+    # write file for freeze start, end duration
+    write_freeze(tots,freeze,video)            
+            
     return
+
+##################################################################################################
+def write_freeze(tots,freeze,video):
+    freeze_start = np.array([[-1 for x in range(2)] for y in range(50)],dtype=int)
+    freeze_end = np.array([[-1 for x in range(2)] for y in range(50)],dtype=int)
+    freeze_dur = np.array([[-1.0 for x in range(2)] for y in range(50)],dtype=float)
+    epoch_n = [0, 0]
+
+    for i in range(2):
+        freeze_on = False
+        epoch = -1
+        for current_frame in range(tots):
+            if freeze[current_frame,i] == True and freeze_on == False:
+                epoch += 1
+                freeze_start[epoch,i] = current_frame
+                freeze_on = True
+            elif freeze[current_frame,i] == False and freeze_on == True:
+                freeze_end[epoch,i] = current_frame
+                freeze_dur[epoch,i] = (freeze_end[epoch,i] - freeze_start[epoch,i] + 1) / 4.0
+                freeze_on = False
+        epoch_n[i] = epoch
+        if freeze_on:
+                freeze_end[epoch,i] = current_frame
+                freeze_dur[epoch,i] = (freeze_end[epoch,i] - freeze_start[epoch,i] + 1) / 4.0
+                freeze_on = False
+    
+    columnName = ['start', 'end', 'duration', 'start', 'end', 'duration']
+    columnType = ['int',   'int', 'float',    'int',   'int', 'float']
+    
+    df = pd.DataFrame(
+        data=np.concatenate((freeze_start[:,0][:, np.newaxis],freeze_end[:,0][:, np.newaxis],freeze_dur[:,0][:, np.newaxis], \
+                             freeze_start[:,1][:, np.newaxis],freeze_end[:,1][:, np.newaxis],freeze_dur[:,1][:, np.newaxis]), axis=1), \
+        columns=columnName)
+  
+    a = dict(zip(columnName, columnType))
+    df = df.astype(dtype = dict(zip(columnName, columnType)))
+    
+    # Output to summary.csv
+    path,filename = os.path.split(video)
+    base,ext = os.path.splitext(filename)
+    filename = '_' + base + '_freeze.csv'
+
+    print("\tWriting {}".format(filename))
+    write_pd2csv(path, filename, df, columnName, columnType, 1000)
+
+    return
+
+
+##################################################################################################
+def create_blank(width, height, rgb_color=(0, 0, 0)):
+    """Create new image(numpy array) filled with certain color in RGB"""
+    # Create black blank image
+    image = np.zeros((height, width, 3), np.uint8)
+
+    # Since OpenCV uses BGR, convert the color first
+    color = tuple(reversed(rgb_color))
+    # Fill image with color
+    image[:] = color
+
+    return image
 
 ##################################################################################################
 def read_trajectory(video):
     import os
 
-    columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y']
-    columnType = ['int','int','int','int','int']
+    columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y', 'sub1_freeze', 'sub2_freeze']
+    columnType = ['int','int','int','int','int','bool','bool']
 
     path,filename = os.path.split(video)
     base,ext = os.path.splitext(filename)
-    filename = '_' + base + '_track.csv'
+    filename = '_' + base + '_track_freeze.csv'
     
     print("\tReading {}".format(filename))
 
@@ -205,9 +359,10 @@ def read_trajectory(video):
     # xy1 = [df['sub1_x'], df['sub1_y']]
     xy1=df[['sub1_x', 'sub1_y']].to_numpy()
     xy2=df[['sub2_x', 'sub2_y']].to_numpy()
+    freeze=df[['sub1_freeze', 'sub2_freeze']].to_numpy()
 
-    return(xy1,xy2)
-###################################
+    return(xy1,xy2,freeze)
+
 def read_csv2pd(path,filename,columnName,columnType):
     import os
     import numpy as np
@@ -216,8 +371,8 @@ def read_csv2pd(path,filename,columnName,columnType):
     inputFilename = os.path.join(path,filename)
 
     df = pd.read_csv(inputFilename,index_col=False)
-    df = df.astype(object) # Need to convert object to set numpy array in a cell
-        
+    df = df.astype(object) # Need to convert to object to set numpy array in a cell
+
     # Post process from str to array
     for i in range (0, len(df)):
         for j in range (0, len(df.columns)):
@@ -227,23 +382,60 @@ def read_csv2pd(path,filename,columnName,columnType):
     return(df)
 
 ##################################################################################################
-def write_trajectory(tots,xy1,xy2,video):
+def write_trajectory(tots,xy1,xy2,freeze,video):
     # Initialize Pandas DataFrame
-    columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y']
-    columnType = ['int','int','int','int','int']
+    columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y', 'sub1_freeze', 'sub2_freeze']
+    columnType = ['int','int','int','int','int','bool','bool']
     frame_num = np.array([y for y in range(tots)])[np.newaxis] # Need 2D matrix to tranpose
     frame_num = np.transpose(frame_num)
-    df = pd.DataFrame(data=np.concatenate((frame_num,xy1,xy2), axis=1), columns=columnName)
+    df = pd.DataFrame(data=np.concatenate((frame_num,xy1,xy2,freeze), axis=1), columns=columnName)
+    a = dict(zip(columnName, columnType))
+    df = df.astype(dtype = dict(zip(columnName, columnType)))
     
     # Output to summary.csv
     path,filename = os.path.split(video)
     base,ext = os.path.splitext(filename)
-    filename = '_' + base + '_track.csv'
+    filename = '_' + base + '_track_freeze.csv'
 
     print("\tWriting {}".format(filename))
     write_pd2csv(path, filename, df, columnName, columnType, 1000)
     
     return
+
+def write_pd2csv(path,filename,df,columnName,columnType,mlw=1000):
+    import os
+    import numpy as np
+    import pandas as pd
+    
+    outputFilename = os.path.join(path,filename)
+    output = open(outputFilename,"w")
+    # mlw = 1000 # max_line_width in np.array2string
+    
+    output.write(','.join(columnName)+'\n')
+
+    for i in range (0, len(df)):
+        output_str = ''
+        for j in range (0, len(columnName)):
+            # print(df.shape,j)
+            output_str = preprocess_output_str(output_str, df.iloc[i,j], columnType[j], 1000)
+        output.write(output_str[0:-1] + '\n')
+    output.close()
+    return
+    
+def preprocess_output_str(output_str, data, columnType, mlw=1000):
+    import numpy as np
+
+    if columnType == 'int_array':
+        output_str = output_str + np.array2string(data,max_line_width=mlw) + ','
+    #elif columnType == 'float':
+    elif columnType == 'float' or columnType == 'bool':
+        # print(data)
+        output_str = output_str + str(data) + ','
+    elif columnType =='str':
+        output_str = output_str + data + ','
+    elif columnType =='int':
+        output_str = output_str + str(data) + ','
+    return(output_str)
 
 ###################################
 # Mouse events handler
@@ -305,38 +497,4 @@ def add_text(img, text, text_top, image_scale):
         fontScale=image_scale,
         color=(255, 255, 255))
     return text_top + int(5 * image_scale) 
-##################################################################################################
-def write_pd2csv(path,filename,df,columnName,columnType,mlw=1000):
-    import os
-    import numpy as np
-    import pandas as pd
-    
-    outputFilename = os.path.join(path,filename)
-    output = open(outputFilename,"w")
-    # mlw = 1000 # max_line_width in np.array2string
-    
-    output.write(','.join(columnName)+'\n')
-
-    for i in range (0, len(df)):
-        output_str = ''
-        for j in range (0, len(columnName)):
-            # print(df.shape,j)
-            output_str = preprocess_output_str(output_str, df.iloc[i,j], columnType[j], 1000)
-        output.write(output_str[0:-1] + '\n')
-    output.close()
-    return
-    
-def preprocess_output_str(output_str, data, columnType, mlw=1000):
-    import numpy as np
-
-    if columnType == 'int_array':
-        output_str = output_str + np.array2string(data,max_line_width=mlw) + ','
-    elif columnType == 'float':
-        output_str = output_str + str(data) + ','
-    elif columnType =='str':
-        output_str = output_str + data + ','
-    elif columnType =='int':
-        output_str = output_str + str(data) + ','
-    return(output_str)
-
 ##################################################################################################
