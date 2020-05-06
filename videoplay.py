@@ -105,7 +105,7 @@ def video_cursor(video):
     x1,y1,x2,y2 = 100,100,120,100
     drag = False
     click = False
-    sub = 'sub1'
+    sub = ''
     pixel_limit = 10.0
     mode = 'drag_mode'
 
@@ -154,14 +154,14 @@ def video_cursor(video):
             
             ###################################
             # display cursors
-            if xy1[current_frame,0] == -1 or drag or click:
+            if (xy1[current_frame,0] == -1 or drag or click) and sub=='sub1':
                 xy1[current_frame,:] = [x1,y1]
             [x1,y1] = xy1[current_frame,:]    
             # [_x1,_y1] = xy1[current_frame,:]
             cv2.line(im,(x1+length,y1+length),(x1-length,y1-length),(0,255,0),2)
             cv2.line(im,(x1+length,y1-length),(x1-length,y1+length),(0,255,0),2)
 
-            if xy2[current_frame,0] == -1 or drag or click:
+            if (xy2[current_frame,0] == -1 or drag or click) and sub=='sub2':
                 xy2[current_frame,:] = [x2,y2]
             [x2,y2] = xy2[current_frame,:]
             # [_x2,_y2] = xy2[current_frame,:]            
