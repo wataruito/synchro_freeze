@@ -1,3 +1,4 @@
+#############################################################################################################
 conv_str2list <- function(df,rex) {
     library(stringr)
     
@@ -20,3 +21,42 @@ conv_str2list <- function(df,rex) {
     }
     return(df)
 }
+
+#############################################################################################################
+#**Set boxplot showing ymin, lower SEM, mean, upper SEM, and ymax**<BR>
+#https://stackoverflow.com/questions/25999677/how-to-plot-mean-and-standard-error-in-boxplot-in-r
+
+MinMeanSEMMax <- function(x) {
+  v <- c(min(x), mean(x) - sd(x)/sqrt(length(x)), mean(x), mean(x) + sd(x)/sqrt(length(x)), max(x))
+  names(v) <- c("ymin", "lower", "middle", "upper", "ymax")
+  v
+}
+
+# Modify above function to remove min and max wikskers
+MeanSEM <- function(x) {
+  v <- c(mean(x) - sd(x)/sqrt(length(x)), mean(x) - sd(x)/sqrt(length(x)), 
+         mean(x),
+         mean(x) + sd(x)/sqrt(length(x)), mean(x) + sd(x)/sqrt(length(x)))
+  names(v) <- c("ymin", "lower", "middle", "upper", "ymax")
+  v
+}
+
+MeanSD <- function(x) {
+  v <- c(mean(x) - sd(x), mean(x) - sd(x), 
+         mean(x),
+         mean(x) + sd(x), mean(x) + sd(x))
+  names(v) <- c("ymin", "lower", "middle", "upper", "ymax")
+  v
+}
+#############################################################################################################
+dis_summary <- function(df.input){
+    #######################################
+    # Display summary
+    cat("dimension: ",dim(df.input),'\n')
+    #str(df.input)
+    print(sapply(df.input, class))
+    #sapply(df.input, typeof)
+    head(df.input,2)
+    #######################################
+}
+#############################################################################################################
