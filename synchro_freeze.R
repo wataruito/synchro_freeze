@@ -60,3 +60,17 @@ dis_summary <- function(df.input){
     #######################################
 }
 #############################################################################################################
+# Save data frame as df and Excel file
+save_files <-function(df.input,path,base){
+    
+    # Save DF (.Rda)
+    base1 = paste0(base,".Rda")
+    filename = file.path(path, base1)
+    save(df.input, file=filename)
+
+    # Output as Excel file, not included with list (.xlsx)
+    base2 = paste0(base,".xlsx")    
+    filename = file.path(path, base2)
+    write_xlsx(df.input,filename)
+}
+#############################################################################################################

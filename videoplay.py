@@ -28,27 +28,29 @@ Keyboard controls:
 """
 
 
-def video_cursor(video):
+def video_cursor(video, mag_factor):
     global x1,y1,x2,y2,drag,sub,click,mode,pixel_limit
 
     ###################################
     # Initialize video windows
 
     cv2.namedWindow('image')
-    cv2.moveWindow('image',250,150)
+    #cv2.moveWindow('image',250,150)
     # Set mouse callback
     cv2.setMouseCallback('image',dragging)
     # Open video file
     cap = cv2.VideoCapture(video)
     # Get the total number of frame
     tots = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
     # Add two trackbars
     cv2.createTrackbar('S','image', 0, int(tots)-1, flick)
-    cv2.setTrackbarPos('S','image',0)
+    cv2.setTrackbarPos('S','image', 0)
+
     cv2.createTrackbar('F','image', 1, 100, flick)
     frame_rate = 30
     cv2.setTrackbarPos('F','image',frame_rate)
-
+    # cv2.setTrackbarPos('F','image',0)
     ##################################
     # Initialize freeze indicator window for each subject
 
@@ -94,8 +96,8 @@ def video_cursor(video):
     print("Video resolution: {}".format(video_format))
     x_pixcels = im.shape[1]
     y_pixcels = im.shape[0]
-    r = 3
-    dim = (x_pixcels*r, y_pixcels*r)
+    # r = 3
+    dim = (x_pixcels*mag_factor, y_pixcels*mag_factor)
 
     print("total frame number: {}".format(tots))
     
@@ -145,12 +147,14 @@ def video_cursor(video):
             im = cv2.resize(im, dim, interpolation = cv2.INTER_AREA)
 
             # put current state and real frame rate in the image
-            im_text = "video_status: " + status + ", frame_rate: " + \
-                    str(realFrameRate) + " fps, mode: " + mode + \
+            im_text1 = "video_status: " + status + ", frame_rate: " + \
+                    str(realFrameRate) + " fps"
+            im_text2 = "nmode: " + mode + \
                     ", target_freeze: " + str(target_freeze+1) + \
                     ", freeze_modify: " + str(freeze_modify)
 
-            add_text(im, im_text, 20, 0.5)
+            add_text(im, im_text1, dim[1]-40, 0.5)
+            add_text(im, im_text2, dim[1]-20, 0.5)
             
             ###################################
             # display cursors
@@ -495,6 +499,7 @@ def add_text(img, text, text_top, image_scale):
         org=(0, text_top),
         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
         fontScale=image_scale,
-        color=(255, 255, 255))
+        color=(0, 255, 255),
+        thickness=2)
     return text_top + int(5 * image_scale) 
 ##################################################################################################
