@@ -52,8 +52,8 @@ def process_freeze(path, DEBUG):
     
     # Initialize Pandas DataFrame
     df = pd.DataFrame()
-    columnName = ['folder_videoname', 'single_animal', 'fz_start_sub1', 'fz_end_sub1', 'fz_start_sub2', 'fz_end_sub2']
-    columnType = ['str','bool','int_array','int_array','int_array','int_array']
+    columnName = ['folder_videoname', 'single_animal', 'video_system', 'fz_start_sub1', 'fz_end_sub1', 'fz_start_sub2', 'fz_end_sub2']
+    columnType = ['str','bool','str','int_array','int_array','int_array','int_array']
     for i in range(len(columnName)):
         df[columnName[i]] = []
     
@@ -73,13 +73,13 @@ def process_freeze(path, DEBUG):
 
                         # Read CSV file
                         # print(filename)
-                        single_animal,sub1Start, sub1End, sub2Start, sub2End = _read_csv(filename)
+                        single_animal, video_system, sub1Start, sub1End, sub2Start, sub2End = _read_csv(filename)
 
                         # Store in PD dataframe
                         dir_name_base = dir_name + '_' + base
-                        df = df.append({columnName[0]:dir_name_base, columnName[1]:single_animal,
-                                                  columnName[2]:sub1Start,columnName[3]:sub1End,
-                                                  columnName[4]:sub2Start,columnName[5]:sub2End},
+                        df = df.append({columnName[0]:dir_name_base, columnName[1]:single_animal, columnName[2]:video_system,
+                                                  columnName[3]:sub1Start,columnName[4]:sub1End,
+                                                  columnName[5]:sub2Start,columnName[6]:sub2End},
                                                    ignore_index=True)
     print("completed.")
     
@@ -108,16 +108,17 @@ def process_freeze(path, DEBUG):
 
     for i in range (0, len(df)):
         subfolder = os.path.join(path, df.iloc[i,0])
-        (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap) = overlap_freezing(df.iloc[i,:], subfolder, False)
+        (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap) = overlap_freezing(df.iloc[i,:], df['video_system'][i], subfolder, False)
         if df['single_animal'][i] == 'TRUE':
             sub2Freeze[i] = "nan"
             overlapFreeze[i] = "nan"
             
     # Add columns & data
     _df = pd.DataFrame()
-    _df[columnName[6]] = sub1Freeze
-    _df[columnName[7]] = sub2Freeze
-    _df[columnName[8]] = overlapFreeze
+    i = 7
+    _df[columnName[i]] = sub1Freeze
+    _df[columnName[i+1]] = sub2Freeze
+    _df[columnName[i+2]] = overlapFreeze
     df = df.join(_df)
     
     # Output to summary1.csv
@@ -148,12 +149,12 @@ def process_freeze(path, DEBUG):
             Cohen_D[i] = "nan"
         else:
             subfolder = os.path.join(path, df.iloc[i,0])
-            Cohen_D[i] = permutation(df.iloc[i,:], subfolder, False)                                  
+            Cohen_D[i] = permutation(df.iloc[i,:], df['video_system'][i], subfolder, False)                                  
     print("completed.")
             
     # Add columns & data
     _df = pd.DataFrame()
-    _df[columnName[9]] = Cohen_D
+    _df[columnName[10]] = Cohen_D
     df = df.join(_df)
     
     # Output to summary2.csv
@@ -189,17 +190,64 @@ def process_freeze(path, DEBUG):
 
     # Add columns & data
     _df = pd.DataFrame()
-    _df[columnName[10]]  = s1_s2_start
-    _df[columnName[11]] = s2_s1_start
-    _df[columnName[12]] = s1_s2_end
-    _df[columnName[13]] = s2_s1_end 
+    i=11
+    _df[columnName[i]]  = s1_s2_start
+    _df[columnName[i+1]] = s2_s1_start
+    _df[columnName[i+2]] = s1_s2_end
+    _df[columnName[i+3]] = s2_s1_end 
     df = df.join(_df)
     
-    # Output to summary2.csv
+    # Output to summary3.csv
     print("\tWriting summary3.csv.")
     write_pd2csv(path,'summary3.csv', df, columnName, columnType, 1000)   
     
+    #############################################
+    # Read summary3.csv
+    # Count behavioral state transitions for Markov chain analysis
+    # Output to summary4.csv
+    #############################################
+
+    # Read CSV into pandas DF
+    df = read_csv2pd(path, 'summary3.csv', columnName, columnType)
     
+    # Count behavioral state transitions for Markov chain analysis
+    print("\nStep5. Counting behavioral state stansitions for Markov chain analysis")
+    print("\tProcessing column: ", end = " ")
+    
+    columnName = np.append(columnName, ['st_count_00','st_count_01','st_count_02','st_count_03',
+                                       'st_count_10','st_count_11','st_count_12','st_count_13',
+                                       'st_count_20','st_count_21','st_count_22','st_count_23',
+                                       'st_count_30','st_count_31','st_count_32','st_count_33'])
+
+    columnType = np.append(columnType, ['int','int','int','int',
+                                        'int','int','int','int',
+                                        'int','int','int','int',
+                                        'int','int','int','int'])
+    
+    state_trans_count = np.zeros((len(df),16),dtype=int)
+    
+    for i in range (0, len(df)):
+        print("{}/{}, ".format(i,len(df)), end=" ")
+        
+        if df['single_animal'][i] == 'TRUE' or df['fz_start_sub1'][i].size == 0 or df['fz_start_sub2'][i].size == 0:
+            #print("hit!")
+            #state_trans_count[i,:] = np.array([])
+            pass
+        else:
+            state_trans_count[i,:] = state_trans(df.iloc[i,:], df['video_system'][i], DEBUG=False)
+            
+    print("completed.")
+    
+    # Add columns & data
+    _df = pd.DataFrame()    
+    for i in range(16):
+        _df[columnName[i+15]]  = state_trans_count[:,i]
+    df = df.join(_df)    
+    
+    # Output to summary3.csv
+    print("\tWriting summary4.csv.")
+    write_pd2csv(path,'summary4.csv', df, columnName, columnType, 1000)   
+        
     #############################################
     # Debugging commands
     if DEBUG:
@@ -217,6 +265,121 @@ def process_freeze(path, DEBUG):
         filename = os.path.join(path,'summary2.csv')
         os.remove(filename)        
     return(df)
+
+###############################################################################
+def state_trans(df, video_system, DEBUG=False):
+    import numpy as np
+    import pandas as pd
+    
+    
+    video_system = df['video_system']
+    
+    sub1Start = df['fz_start_sub1']
+    sub1End = df['fz_end_sub1']
+    sub2Start = df['fz_start_sub2']
+    sub2End = df['fz_end_sub2']
+        
+    """
+    Video frame to be analyzed
+    FreezeFrame 0, (pre: 1 - 240), (CS: 241 - 720), 721, Total 722 frames
+    PCBox          (pre: 0 - 239), (CS: 240 - 719),      Total 720 frames
+    """
+    
+    if video_system == 'FreezeFrame':
+        # FreezeFrame
+        preStartFrame = 1
+        preEndFrame = 240
+        csStartFrame = 241
+        csEndFrame = 720
+    if video_system == 'PCBox':    
+        # PCBox
+        preStartFrame = 0
+        preEndFrame = 239
+        csStartFrame = 240
+        csEndFrame = 719
+
+    # Create working numpy matrix of freezing (True/False) for each video frame
+    row, column = 721, 2 # for frame 0-720
+    sub_freeze = np.zeros((row,column),dtype=bool) # All values are False
+    
+    # Mark True when freeze
+    # For animal#1
+    for i in range(0,int(len(sub1Start))):
+        if sub1Start[i] < preStartFrame:
+            sub1Start[i] = preStartFrame
+        if sub1End[i] > csEndFrame:
+            sub1End[i] = csEndFrame
+        for j in range(sub1Start[i],sub1End[i]+1):
+            sub_freeze[j][0] = True
+
+    # For animal#2
+    for i in range(0,int(len(sub2Start))):
+        if sub2Start[i] < preStartFrame:
+            sub2Start[i] = preStartFrame
+        if sub2End[i] > csEndFrame:
+            sub2End[i] = csEndFrame
+        for j in range(sub2Start[i],sub2End[i]+1):
+            sub_freeze[j][1] = True    
+    
+    # Initialize Pandas DataFrame as df. The size is the same with sub_freeze (frame 0-720)
+    _df = pd.DataFrame(data=sub_freeze, columns=['sub1_freeze', 'sub2_freeze'], dtype=bool)
+    #################################################
+    # compute the behavior states
+    #     state  sub1    sub2
+    #     0      freeze  freeze
+    #     1      freeze  no
+    #     2      no      freeze
+    #     3      no      no
+    #################################################
+    state = np.zeros(len(_df), dtype=int)
+
+    for i in range (0, len(_df)):
+        if _df['sub1_freeze'][i] == True and _df['sub2_freeze'][i] == True:
+            state[i] = 0
+        elif _df['sub1_freeze'][i] == True and _df['sub2_freeze'][i] == False:
+            state[i] = 1        
+        elif _df['sub1_freeze'][i] == False and _df['sub2_freeze'][i] == True:
+            state[i] = 2       
+        elif _df['sub1_freeze'][i] == False and _df['sub2_freeze'][i] == False:
+            state[i] = 3
+            
+    # store the results to _df2 temporarily
+    _df2 = pd.DataFrame()
+    _df2['state'] = state
+    # merge the result as new column in _df
+    _df = _df.join(_df2)
+    #################################################
+    # compute the state transition
+    #    Number of row decreases by 1 (0-719)
+    #################################################
+    _df2 = pd.DataFrame()
+    _df2['From'] = []
+    _df2['To'] = []
+    _df2 = _df2.astype(int)
+
+    for i in range (0, len(_df)-1):
+        new_row = {'From':_df['state'][i], 'To':_df['state'][i+1]}
+        _df2 = _df2.append(new_row, ignore_index=True)
+
+    #################################################
+    # Search for each of 16 patterns
+    #   during CS (either 241-720 or 240-719). Frame number
+    #   is 480, but the number of states is 479)
+    #################################################
+    pattern = [[0, 0],[0, 1],[0, 2],[0, 3],
+               [1, 0],[1, 1],[1, 2],[1, 3],
+               [2, 0],[2, 1],[2,2 ],[2, 3],
+               [3, 0],[3, 1],[3, 2],[3, 3]]
+    state_trans_count = np.zeros(16, dtype=int)
+
+    for i in range (csStartFrame, csEndFrame):
+        for j in range (len(pattern)):
+            if _df2['From'][i] == pattern[j][0] and _df2['To'][i] == pattern[j][1]:
+                state_trans_count[j] += 1
+                
+    # print(state_trans_count)
+                
+    return(state_trans_count)
 
 ###############################################################################
 def lagtime(w1, w2, DEBUG=False):
@@ -281,7 +444,8 @@ def lag_time(df, DEBUG=False):
 
 ###############################################################################
 def _read_csv(filename):
-
+    # Read original csv file of start and stop of each freezing epoch
+    
     # importing csv module 
     import csv 
 
@@ -313,7 +477,13 @@ def _read_csv(filename):
     for i in range(0,len(rows)):
         if rows[i][0] == 'single_animal:':
             single_animal = rows[i][1] 
-    
+
+    # Detect video system, either FreezeFrame or PCBox
+    video_system = ''
+    for i in range(0,len(rows)):
+        if rows[i][0] == 'video:':
+            video_system = rows[i][1]            
+
     # Read start and end for subject1
     # for i in range(2,len(rows)):
     _data_start = False
@@ -345,7 +515,7 @@ def _read_csv(filename):
     sub2Start = np.array(_sub2Start)
     sub2End = np.array(_sub2End)
         
-    return (single_animal,sub1Start,sub1End,sub2Start,sub2End)
+    return (single_animal,video_system,sub1Start,sub1End,sub2Start,sub2End)
 
 ###############################################################################
 def read_csv(filename):
@@ -401,40 +571,81 @@ def read_csv(filename):
     return (sub1Start,sub1End,sub2Start,sub2End)
 
 ##################################################################################################
-def overlap_freezing (df, path, output):
+def overlap_freezing (df, video_system, path, output):
     # Compute overlap of freezing
     #
     # The original videos is at 4 frame per sec (0.25s/frame)
     # The duration is 3 min: total 720 frames
+    # 1) FreezeFrame generates video 0-721 frames (total 722 frames)
+    # Only care 1-720 frames (total 720 frames), ignoring frame# 0 (black frame) and 721. 
     #     1 min for acclimation (frame 1-240)
     #     2 min for CS (frame 241-720))
     # 
     #     Create np.array of 721 rows x 2 columes, 
     #     representing two mice and 720 video frames (1 to 720 frame)
-    #     column 0 will be not used.
-    
+    #     row 0 will be not used.
+   
+    # PCbox generates video 0-719 frames (total 720 frames)
+        
     import matplotlib.pyplot as plt
     import os
     import numpy as np
 
-    sub1Start = df[2]
-    sub1End = df[3]
-    sub2Start = df[4]
-    sub2End = df[5]
     
     filename = os.path.join(path,'overlap_fig.eps')
-        
+    
+    video_system = df['video_system']
+
+    sub1Start = df['fz_start_sub1']
+    sub1End = df['fz_end_sub1']
+    sub2Start = df['fz_start_sub2']
+    sub2End = df['fz_end_sub2']
+    
+#     i = 3
+#     sub1Start = df[i]
+#     sub1End = df[i+1]
+#     sub2Start = df[i+2]
+#     sub2End = df[i+3]
+    
+    """
+    Video frame to be analyzed
+    FreezeFrame 0, (pre: 1 - 240), (CS: 241 - 720), 721, Total 722 frames
+    PCBox          (pre: 0 - 239), (CS: 240 - 719),      Total 720 frames
+    """
+    
+    if video_system == 'FreezeFrame':
+        # FreezeFrame
+        preStartFrame = 1
+        preEndFrame = 240
+        csStartFrame = 241
+        csEndFrame = 720
+    if video_system == 'PCBox':    
+        # PCBox
+        preStartFrame = 0
+        preEndFrame = 239
+        csStartFrame = 240
+        csEndFrame = 719
+
+    # Create working numpy matrix of freezing (True/False) for each video frame
     column, row = 3, 721;
     overlap = np.array([[0 for x in range(column)] for y in range(row)])
 
     # Set the overlap as 1 at freeze for each animal
     # For animal#1
     for i in range(0,int(len(sub1Start))):
+        if sub1Start[i] < preStartFrame:
+            sub1Start[i] = preStartFrame
+        if sub1End[i] > csEndFrame:
+            sub1End[i] = csEndFrame
         for j in range(sub1Start[i],sub1End[i]+1):
             overlap[j][0] = 1
 
     # For animal#2
     for i in range(0,int(len(sub2Start))):
+        if sub2Start[i] < preStartFrame:
+            sub2Start[i] = preStartFrame
+        if sub2End[i] > csEndFrame:
+            sub2End[i] = csEndFrame        
         for j in range(sub2Start[i],sub2End[i]+1):
             overlap[j][1] = 1
 
@@ -442,7 +653,8 @@ def overlap_freezing (df, path, output):
     # and overlapped freezing (counter[2])
     counter = np.zeros((3), dtype=int)
 
-    for i in range(241,int(len(overlap))):        
+    #for i in range(241,int(len(overlap))):
+    for i in range(csStartFrame,csEndFrame + 1):
             if overlap[i,0] == 1:
                 counter[0] = counter[0] + 1
             if overlap[i,1] == 1:
@@ -484,7 +696,7 @@ def overlap_freezing (df, path, output):
 
 
 ##################################################################################################
-def permutation(df, path, output):
+def permutation(df, video_system, path, output):
     # Perform 1000 times permutation of relative timing between two mice during tone.
     # Compute overlapped freeaing for each and statistical numbers
     
@@ -503,7 +715,7 @@ def permutation(df, path, output):
     import random
 
     # Compute overlap table
-    (_sub1Freeze, _sub2Freeze, _overlapFreeze, overlap) = overlap_freezing(df, path, False)
+    (_sub1Freeze, _sub2Freeze, _overlapFreeze, overlap) = overlap_freezing(df, video_system, path, False)
 
     # Permutation
     # Repeat random shift of subject1 for 1000 times 
@@ -591,7 +803,7 @@ def preprocess_output_str(output_str, data, columnType, mlw=1000):
 
     if columnType == 'int_array':
         output_str = output_str + np.array2string(data,max_line_width=mlw) + ','
-    elif columnType == 'float' or columnType == 'bool':
+    elif columnType == 'float' or columnType == 'bool' or columnType =='int':
         output_str = output_str + str(data) + ','
     elif columnType =='str':
         output_str = output_str + data + ','

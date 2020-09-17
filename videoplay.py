@@ -1,5 +1,12 @@
 # Orignated from maximus009/VideoPlayer
 # https://github.com/maximus009/VideoPlayer
+"""
+9/14/2020 wi Bug fix
+                # freeze_end[epoch,i] = current_frame Identified bug 9/14/2020 wi
+                freeze_end[epoch,i] = current_frame - 1
+"""
+
+
 import os, sys, time
 import cv2, numpy as np
 import math
@@ -297,12 +304,13 @@ def write_freeze(tots,freeze,video):
         freeze_on = False
         epoch = -1
         for current_frame in range(tots):
-            if freeze[current_frame,i] == True and freeze_on == False:
+            if freeze[current_frame,i] == True and freeze_on == False:    # freeze epoch starts
                 epoch += 1
                 freeze_start[epoch,i] = current_frame
                 freeze_on = True
-            elif freeze[current_frame,i] == False and freeze_on == True:
-                freeze_end[epoch,i] = current_frame
+            elif freeze[current_frame,i] == False and freeze_on == True:  # freeze ephoc ends
+                # freeze_end[epoch,i] = current_frame Identified bug 9/14/2020 wi
+                freeze_end[epoch,i] = current_frame - 1
                 freeze_dur[epoch,i] = (freeze_end[epoch,i] - freeze_start[epoch,i] + 1) / 4.0
                 freeze_on = False
         epoch_n[i] = epoch
