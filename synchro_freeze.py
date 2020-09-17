@@ -263,7 +263,9 @@ def process_freeze(path, DEBUG):
         filename = os.path.join(path,'summary1.csv')
         os.remove(filename)
         filename = os.path.join(path,'summary2.csv')
-        os.remove(filename)        
+        os.remove(filename)
+        filename = os.path.join(path,'summary3.csv')
+        os.remove(filename)   
     return(df)
 
 ###############################################################################
