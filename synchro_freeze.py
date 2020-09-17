@@ -203,7 +203,7 @@ def process_freeze(path, DEBUG):
     
     #############################################
     # Read summary3.csv
-    # Count behavioral state transitions for Markov chain analysis
+    # Count behavioral state & transitions for Markov chain analysis
     # Output to summary4.csv
     #############################################
 
@@ -211,10 +211,11 @@ def process_freeze(path, DEBUG):
     df = read_csv2pd(path, 'summary3.csv', columnName, columnType)
     
     # Count behavioral state transitions for Markov chain analysis
-    print("\nStep5. Counting behavioral state stansitions for Markov chain analysis")
+    print("\nStep5. Counting behavioral state & stansitions for Markov chain analysis")
     print("\tProcessing column: ", end = " ")
     
-    columnName = np.append(columnName, ['st_count_00','st_count_01','st_count_02','st_count_03',
+    columnName = np.append(columnName, ['s_count_0','s_count_1','s_count_2','s_count_3',
+                                        'st_count_00','st_count_01','st_count_02','st_count_03',
                                        'st_count_10','st_count_11','st_count_12','st_count_13',
                                        'st_count_20','st_count_21','st_count_22','st_count_23',
                                        'st_count_30','st_count_31','st_count_32','st_count_33'])
@@ -222,8 +223,10 @@ def process_freeze(path, DEBUG):
     columnType = np.append(columnType, ['int','int','int','int',
                                         'int','int','int','int',
                                         'int','int','int','int',
+                                        'int','int','int','int',
                                         'int','int','int','int'])
     
+    state_count = np.zeros((len(df),4),dtype=int)
     state_trans_count = np.zeros((len(df),16),dtype=int)
     
     for i in range (0, len(df)):
@@ -234,14 +237,16 @@ def process_freeze(path, DEBUG):
             #state_trans_count[i,:] = np.array([])
             pass
         else:
-            state_trans_count[i,:] = state_trans(df.iloc[i,:], df['video_system'][i], DEBUG=False)
+            state_count[i,:], state_trans_count[i,:] = state_trans(df.iloc[i,:], df['video_system'][i], DEBUG=False)
             
     print("completed.")
     
     # Add columns & data
     _df = pd.DataFrame()    
+    for i in range(4):
+        _df[columnName[i+15]]  = state_count[:,i]
     for i in range(16):
-        _df[columnName[i+15]]  = state_trans_count[:,i]
+        _df[columnName[i+19]]  = state_trans_count[:,i]
     df = df.join(_df)    
     
     # Output to summary3.csv
@@ -334,16 +339,25 @@ def state_trans(df, video_system, DEBUG=False):
     #     3      no      no
     #################################################
     state = np.zeros(len(_df), dtype=int)
+    state_count = np.zeros(4, dtype=int)
 
     for i in range (0, len(_df)):
         if _df['sub1_freeze'][i] == True and _df['sub2_freeze'][i] == True:
             state[i] = 0
+            if i >= csStartFrame and i <= csEndFrame:
+                state_count[0] += 1           
         elif _df['sub1_freeze'][i] == True and _df['sub2_freeze'][i] == False:
-            state[i] = 1        
+            state[i] = 1
+            if i >= csStartFrame and i <= csEndFrame:
+                state_count[1] += 1   
         elif _df['sub1_freeze'][i] == False and _df['sub2_freeze'][i] == True:
-            state[i] = 2       
+            state[i] = 2  
+            if i >= csStartFrame and i <= csEndFrame:
+                state_count[2] += 1   
         elif _df['sub1_freeze'][i] == False and _df['sub2_freeze'][i] == False:
             state[i] = 3
+            if i >= csStartFrame and i <= csEndFrame:
+                state_count[3] += 1   
             
     # store the results to _df2 temporarily
     _df2 = pd.DataFrame()
@@ -381,7 +395,7 @@ def state_trans(df, video_system, DEBUG=False):
                 
     # print(state_trans_count)
                 
-    return(state_trans_count)
+    return(state_count,state_trans_count)
 
 ###############################################################################
 def lagtime(w1, w2, DEBUG=False):
