@@ -131,11 +131,19 @@ def video_cursor(video, mag_factor):
     filename = '_' + base + '_track_freeze.csv'
     
     if os.path.exists(os.path.join(path,filename)):
-        xy1, xy2, freeze = read_trajectory(video)
+        # xy1, xy2, freeze = read_trajectory(video)
+        width,halfDep,L1,L2,L4,xy1,xy2,freeze = read_traj(video)
     else:
+        width = 295.0
+        halfDep = 86.5
+        L1 = [-5,667]
+        L2 = [42,486]
+        L4 = [914, 670]
         xy1 = np.array([[-1 for x in range(2)] for y in range(tots)])
         xy2 = np.array([[-1 for x in range(2)] for y in range(tots)])
         freeze = np.array([[False for x in range(2)] for y in range(tots)])
+        
+        
         
     ######################################################################
     # Main loop
@@ -286,7 +294,8 @@ def video_cursor(video, mag_factor):
     cv2.destroyAllWindows()
 
     # write file for trajectory and freezing
-    write_trajectory(tots,xy1,xy2,freeze,video)
+    # write_trajectory(tots,xy1,xy2,freeze,video)
+    write_traj(width,halfDep,L1,L2,L4,tots,xy1,xy2,freeze,video)
     
     # write file for freeze start, end duration
     write_freeze(tots,freeze,video)            
@@ -510,4 +519,143 @@ def add_text(img, text, text_top, image_scale):
         color=(0, 255, 255),
         thickness=2)
     return text_top + int(5 * image_scale) 
+##################################################################################################
+def read_traj(video):
+    # read *_trac_freeze.csv file and extract
+    #    landmark coordinates for L1, L2, and L4
+    #    trajectory coordinates for sub1 and sub2
+    #    freezing state (bool) for sub1 and sub2
+    #
+    # <file format>
+    # measurement:
+    # L1-L4(width), 295.0
+    # L1-L2(halfDep), 86.5
+    #
+    # landmark:
+    # name,x,y
+    # L1, ,
+    # L2, ,
+    # L4, ,
+    #
+    # coordinate:
+    # frame,sub1_x,sub1_y,sub2_x,sub2_y,sub1_freeze,sub2_freeze
+    #
+    # Old format, which starts with frame,sub1_x ... can be read.
+    #
+    
+    import csv
+    import os
+    import numpy as np
+    import pandas as pd
+
+    columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y', 'sub1_freeze', 'sub2_freeze']
+    columnType = ['int','int','int','int','int','bool','bool']
+
+    # defalt values
+    width = 295.0
+    halfDep = 86.5
+    L1, L2, L4 = [0,0],[0,0],[0,0]
+    
+    path,filename = os.path.split(video)
+    base,ext = os.path.splitext(filename)
+    filename = '_' + base + '_track_freeze.csv'
+    inputFilename = os.path.join(path,filename)
+    
+    print("\tReading {}".format(filename))
+    
+    # reading csv file 
+    with open(inputFilename, 'r') as csvfile: 
+        # creating a csv reader object 
+        csvreader = csv.reader(csvfile) 
+
+        # extracting each data row one by one
+        for row in csvreader:
+            if row[0] == 'L1-L4(width)':
+                width = float(row[1])
+            elif row[0] == 'L1-L2(halfDep)':
+                halfDep = float(row[1])
+            elif row[0] == 'L1':
+                L1 = [int(row[1]), int(row[2])]
+            elif row[0] == 'L2':
+                L2 = [int(row[1]), int(row[2])]
+            elif row[0] == 'L4':
+                L4 = [int(row[1]), int(row[2])]
+            elif row[0] == 'coordinate:':                           
+                break
+            elif row[0] == 'frame':
+                csvfile.seek(csvreader.line_num - 1) # back one line
+                break  
+        # after break, use dataframe.read_csv
+        df = pd.read_csv(csvfile,index_col=False)
+        df = df.astype(object) # Need to convert to object to set numpy array in a cell
+
+    # Post process from str to array
+    for i in range (0, len(df)):
+        for j in range (0, len(df.columns)):
+            if columnType[j] == 'int_array':
+                df.iloc[i,j] = np.fromstring(df.iloc[i,j][1:-1],dtype=int,sep=' ')                
+                
+    xy1=df[['sub1_x', 'sub1_y']].to_numpy()
+    xy2=df[['sub2_x', 'sub2_y']].to_numpy()
+    freeze=df[['sub1_freeze', 'sub2_freeze']].to_numpy()
+
+    return(width,halfDep,L1,L2,L4,xy1,xy2,freeze)            
+
+##################################################################################################
+def write_traj(width,halfDep,L1,L2,L4,tots,xy1,xy2,freeze,video):
+    # write *_trac_freeze.csv file
+    #
+    # <file format>
+    # measurement:
+    # L1-L4(width), 295.0
+    # L1-L2(halfDep), 86.5
+    #
+    # landmark:
+    # name,x,y
+    # L1, ,
+    # L2, ,
+    # L4, ,
+    #
+    # coordinate:
+    # frame,sub1_x,sub1_y,sub2_x,sub2_y,sub1_freeze,sub2_freeze
+    #
+    
+    import os
+    import csv
+    import numpy as np
+    import pandas as pd
+
+    # Initialize Pandas DataFrame
+    columnName = ['frame', 'sub1_x', 'sub1_y', 'sub2_x', 'sub2_y', 'sub1_freeze', 'sub2_freeze']
+    columnType = ['int','int','int','int','int','bool','bool']
+    frame_num = np.array([y for y in range(tots)])[np.newaxis] # Need 2D matrix to tranpose
+    frame_num = np.transpose(frame_num)
+    df = pd.DataFrame(data=np.concatenate((frame_num,xy1,xy2,freeze), axis=1), columns=columnName)
+    df = df.astype(dtype = dict(zip(columnName, columnType)))
+
+    # Output to summary.csv
+    path,filename = os.path.split(video)
+    base,ext = os.path.splitext(filename)
+    filename = '_' + base + '_track_freeze.csv'
+    outputFilename = os.path.join(path,filename)
+    
+    print("\tWriting {}".format(filename))
+
+    with open(outputFilename, 'w', newline='') as csvfile: # newline='' is for windows
+        spamwriter = csv.writer(csvfile, delimiter=',')
+        spamwriter.writerow(['measurement:'])
+        spamwriter.writerow(['L1-L4(width)', width])
+        spamwriter.writerow(['L1-L2(halfDep)', halfDep])
+        spamwriter.writerow([''])
+        spamwriter.writerow(['landmark:'])
+        spamwriter.writerow(['name','x','y'])
+        spamwriter.writerow(['L1',L1[0],L1[1]])
+        spamwriter.writerow(['L2',L2[0],L2[1]])        
+        spamwriter.writerow(['L4',L4[0],L4[1]])
+        spamwriter.writerow([''])
+        spamwriter.writerow(['coordinate:'])        
+        
+        df.to_csv(csvfile,index=False)
+    
+    return
 ##################################################################################################
