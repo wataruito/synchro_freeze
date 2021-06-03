@@ -28,6 +28,9 @@ Keyboard controls:
     s: stop playing
     a: step back a frame
     d: step forward a frame
+    A: step back <frame_jump> frames
+    D: step forward <frame_jump> frames
+    ~: set <frame_jump> parameter
     q: play faster
     e: play slower
 
