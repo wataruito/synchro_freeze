@@ -163,7 +163,8 @@ def video_cursor(video, mag_factor):
         try:
             # If reach to the end, play from the begining
             # if current_frame==tots-1:
-            if current_frame == tots:
+            # if current_frame == tots:
+            if current_frame >= tots:
                 current_frame = 0
 
             # read a frame
