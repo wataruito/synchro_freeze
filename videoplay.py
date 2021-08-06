@@ -337,12 +337,15 @@ def video_cursor(video, mag_factor):
 
 
 def write_freeze(tots, freeze, video):
+
+    epoch_max = 100
+
     freeze_start = np.array([[-1 for x in range(2)]
-                            for y in range(50)], dtype=int)
+                            for y in range(epoch_max)], dtype=int)
     freeze_end = np.array([[-1 for x in range(2)]
-                          for y in range(50)], dtype=int)
+                          for y in range(epoch_max)], dtype=int)
     freeze_dur = np.array([[-1.0 for x in range(2)]
-                          for y in range(50)], dtype=float)
+                          for y in range(epoch_max)], dtype=float)
     epoch_n = [0, 0]
 
     for i in range(2):
