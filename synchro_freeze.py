@@ -1,3 +1,4 @@
+# test
 ###############################################################################
 # pipeline to process epochs from two subjects
 # The original script started computer freezing epoch, but extended to generic epochs.
@@ -20,6 +21,7 @@ stress:             no_stress
 video:              HomeCage
 video_total_frames: 17998
 comment:            dorsal HPC
+
 
 data:   start   end     duration    start   end     duration
         303     308     1.5         435     440     1.5
