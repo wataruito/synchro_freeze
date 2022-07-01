@@ -12,12 +12,15 @@
   - Currently, only for inter the lab usage. No support for public.
 
 # Installation
-Supposed miniconda is already installed.
+Supposed miniconda and ffmpeg are already installed.
 1. Python environment
   ```
   conda update -n base -c defaults conda`
   conda create --name jl3
   conda activate jl3
   conda install python=3.9 anaconda
+  
+  pip install opencv-contrib-python
+  pip install ffmpeg-python
   ```
 2. Download the code and run the notebook files.
