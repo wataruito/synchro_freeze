@@ -35,4 +35,5 @@
 2. Load software to Arduino
 3. Install Python environment
 
-test the readme.
+test the readme. fix?
+
