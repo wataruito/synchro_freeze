@@ -652,11 +652,12 @@ def read_csv2pd(path, filename, columnName, columnType):
 
     # Adjust dtypes according columnType
     type_dict = {columnName[i]: columnType[i] for i in range(len(columnName))}
+    # Select only columns that exist in the df
     type_dict = {key: type_dict[key] for key in type_dict.keys() & df.columns}
     df = df.astype(
         {name: np.int64 for name, age in type_dict.items() if age == 'int'})
-    df = df.astype({name: np.float64 for name,
-                   age in type_dict.items() if age == 'float'})
+    df = df.astype(
+        {name: np.float64 for name, age in type_dict.items() if age == 'float'})
 
     return(df)
 
@@ -686,142 +687,15 @@ def read_csv2pd_org(path, filename, columnName, columnType):
     return(df)
 
 
-def overlap_freezing(df, path, output):
-    # Compute overlap of freezing
-    #
-    # The original videos is at 4 frame per sec (0.25s/frame)
-    # The duration is 3 min: total 720 frames
-    # 1) FreezeFrame generates video 0-721 frames (total 722 frames)
-    # Only care 1-720 frames (total 720 frames), ignoring frame# 0 (black frame) and 721.
-    #     1 min for acclimation (frame 1-240)
-    #     2 min for CS (frame 241-720))
-    #
-    #     Create np.array of 721 rows x 2 columes,
-    #     representing two mice and 720 video frames (1 to 720 frame)
-    #     row 0 will be not used.
-
-    # PCbox generates video 0-719 frames (total 720 frames)
-    """
-    Extended to generic epoch from home cage videos
-
-    Parenthesis indicates the video frames to be compute for % epoch time
-    FreezeFrame 0,  (pre: 1 - 240), (CS: 241 - 720), 721,   Total 722 frames
-    PCBox           (pre: 0 - 239), (CS: 240 - 719),        Total 720 frames
-    HomeCage - analyze the entire frames
-                    (0 to video_total_frames - 1),          Total video_total_frames frames
-    """
-
-    import matplotlib.pyplot as plt
-    import os
-    import numpy as np
-
-    filename = os.path.join(path, 'overlap_fig.eps')
-
-    video_system = df['video_system']
-    video_total_frames = df['video_total_frames']
-
-    sub1Start = df['fz_start_sub1']
-    sub1End = df['fz_end_sub1']
-    sub2Start = df['fz_start_sub2']
-    sub2End = df['fz_end_sub2']
-
-    if video_system == 'FreezeFrame':
-        # FreezeFrame
-        preStartFrame = 1
-        preEndFrame = 240
-        csStartFrame = 241
-        csEndFrame = 720
-        column, row = 3, 721
-    if video_system == 'PCBox':
-        # PCBox
-        preStartFrame = 0
-        preEndFrame = 239
-        csStartFrame = 240
-        csEndFrame = 719
-        column, row = 3, 721
-    if video_system == 'HomeCage':
-        # Generic, presumably home cage annotation
-        preStartFrame = 0
-        preEndFrame = 0
-        csStartFrame = 0
-        csEndFrame = video_total_frames - 1
-        column, row = 3, video_total_frames
-
-    # Create working numpy matrix of freezing (True/False) for each video frame
-    overlap = np.array([[0 for x in range(column)] for y in range(row)])
-
-    # Set the overlap as 1 at freeze for each animal
-    # For animal#1
-    for i in range(0, int(len(sub1Start))):
-        if sub1Start[i] < preStartFrame:
-            sub1Start[i] = preStartFrame
-        if sub1End[i] > csEndFrame:
-            sub1End[i] = csEndFrame
-        for j in range(sub1Start[i], sub1End[i]+1):
-            overlap[j][0] = 1
-
-    # For animal#2
-    for i in range(0, int(len(sub2Start))):
-        if sub2Start[i] < preStartFrame:
-            sub2Start[i] = preStartFrame
-        if sub2End[i] > csEndFrame:
-            sub2End[i] = csEndFrame
-        for j in range(sub2Start[i], sub2End[i]+1):
-            overlap[j][1] = 1
-
-    # Scan the overlap valiable for freezing in animal#1 (counter[0]), animal#2 (counter[1])
-    # and overlapped freezing (counter[2])
-    counter = np.zeros((3), dtype=int)
-
-    for i in range(csStartFrame, csEndFrame + 1):
-        if overlap[i, 0] == 1:
-            counter[0] = counter[0] + 1
-        if overlap[i, 1] == 1:
-            counter[1] = counter[1] + 1
-        if overlap[i, 0] == 1 and overlap[i, 1] == 1:
-            overlap[i, 2] = 1
-            counter[2] = counter[2] + 1
-
-    data_range = float(csEndFrame - preEndFrame)
-    sub1Freeze = counter[0]/data_range*100.0
-    sub2Freeze = counter[1]/data_range*100.0
-    overlapFreeze = counter[2]/data_range*100.0
-
-    # output
-    if output:
-        print("Folder name: " + df[0])
-        print("Animal1 freeze : %f" % (sub1Freeze))
-        print("Animal2 freeze : %f" % (sub2Freeze))
-        print("Overlap freeze : %f" % (overlapFreeze))
-
-        # Plotting the freezing dynamics
-        fig = plt.figure(num=None, figsize=(15, 5), dpi=80,
-                         facecolor='w', edgecolor='k')
-        fig.subplots_adjust(top=0.8)
-
-        ax1 = fig.add_subplot(211)
-        x = overlap[:, 0] + 1.75
-        y = overlap[:, 1] + 1.25
-        z = overlap[:, 2]
-
-        ax1.plot(x)
-        ax1.plot(y)
-        ax1.plot(z)
-
-        ax1.set_xlabel('x - axis')
-        ax1.set_ylabel('y - axis')
-        ax1.set_title('From top: Animal1, Animal2 and overlap!')
-        plt.savefig(filename, format='eps', dpi=1000)
-
-    return(sub1Freeze, sub2Freeze, overlapFreeze, overlap)
-
-
 ###############################################################################
 # compute_epoch_percent2()
 #       read_csv2pd()
-#       overlap_freezing2()
+#       overlap_freezing3()
+#           frames_range()
 #       write_pd2csv()
-def compute_epoch_percent2(path, columnName, columnType, input_file='summary2.csv', output_file='summary3.csv'):
+def compute_epoch_percent3(path, columnName, columnType, input_file='summary2.csv', output_file='summary3.csv'):
+    import warnings
+    warr_lines = []
 
     # Read CSV into pandas DF
     df = read_csv2pd(path, input_file, columnName, columnType)
@@ -844,20 +718,37 @@ def compute_epoch_percent2(path, columnName, columnType, input_file='summary2.cs
     print("\tProcessing:  ", end=" ")
 
     for i in range(0, len(df)):
-        if i % 1000 == 0:
+        if i % 10 == 0:
             print(i, '/', len(df), end=', ')
 
         subfolder = os.path.join(path, df.iloc[i, 0])
 
-        (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap,
-         fz_sub1_bout_dur_ave[i], fz_sub1_bout_n[i], fz_sub2_bout_dur_ave[i], fz_sub2_bout_n[i]) \
-            = overlap_freezing2(df.iloc[i, :], subfolder, False)
+        # (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap,
+        #     fz_sub1_bout_dur_ave[i], fz_sub1_bout_n[i], fz_sub2_bout_dur_ave[i], fz_sub2_bout_n[i]) \
+        #     = overlap_freezing3(df.iloc[i, :], subfolder, False)
 
-        if df['single_animal'][i] == 'TRUE':
-            sub2Freeze[i] = "nan"
-            overlapFreeze[i] = "nan"
-            fz_sub2_bout_dur_ave[i] = "nan"
-            fz_sub2_bout_n[i] = "nan"
+        # If freezing is zero, the old overlap_freezing2 shows warning message
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            try:
+                (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap,
+                 fz_sub1_bout_dur_ave[i], fz_sub1_bout_n[i], fz_sub2_bout_dur_ave[i], fz_sub2_bout_n[i]) \
+                    = overlap_freezing3(df.iloc[i, :], subfolder, False)
+            except Warning:
+                print('Raised! ', '##', i,
+                      df['folder_videoname'][i], '## ', end='')
+                warr_lines = np.append(warr_lines, df['folder_videoname'][i])
+
+        if df['single_animal'][i] == True:
+            # sub2Freeze[i] = 0
+            # overlapFreeze[i] = 0
+            # fz_sub2_bout_dur_ave[i] = 0
+            # fz_sub2_bout_n[i] = 0
+            sub2Freeze[i] = np.nan
+            overlapFreeze[i] = np.nan
+            fz_sub2_bout_dur_ave[i] = np.nan
+            # We need to set value 0 at integer because we cannot set nan as integer
+            fz_sub2_bout_n[i] = 0
 
     # Add columns & data
     _df = pd.DataFrame()
@@ -876,10 +767,10 @@ def compute_epoch_percent2(path, columnName, columnType, input_file='summary2.cs
     print("\tWriting " + output_file + ".")
     write_pd2csv(path, output_file, df, columnName, columnType, 1000)
 
+    return warr_lines
 
-def overlap_freezing2(df, path, output):
-    # Compute overlap of freezing
-    #
+
+def frames_range(video_system, video_total_frames):
     # The original videos is at 4 frame per sec (0.25s/frame)
     # The duration is 3 min: total 720 frames
     # 1) FreezeFrame generates video 0-721 frames (total 722 frames)
@@ -902,6 +793,38 @@ def overlap_freezing2(df, path, output):
                     (0 to video_total_frames - 1),          Total video_total_frames frames
     """
 
+    if video_system == 'FreezeFrame':
+        # FreezeFrame
+        csStartFrame, csEndFrame = 241, 720
+        startFrame, endFrame = 0, 721
+    if video_system == 'FreezeFrame_1st_half':
+        # FreezeFrame
+        csStartFrame, csEndFrame = 241, 480
+        startFrame, endFrame = 0, 721
+    if video_system == 'FreezeFrame_2nd_half':
+        # FreezeFrame
+        csStartFrame, csEndFrame = 481, 720
+        startFrame, endFrame = 0, 721
+    if video_system == 'FreezeFrame_contextual':
+        # FreezeFrame
+        csStartFrame, csEndFrame = 1, 720
+        startFrame, endFrame = 0, 721
+    if video_system == 'PCBox':
+        # PCBox
+        csStartFrame, csEndFrame = 240, 719
+        startFrame, endFrame = 0, 719
+    if video_system == 'HomeCage':
+        # Generic, presumably home cage annotation
+        csStartFrame, csEndFrame = 0, video_total_frames - 1
+        startFrame, endFrame = 0, video_total_frames - 1
+
+    return csStartFrame, csEndFrame, startFrame, endFrame
+
+
+def overlap_freezing3(df, path, output):
+    # Compute overlap of freezing
+    #
+
     import matplotlib.pyplot as plt
     import os
     import numpy as np
@@ -916,70 +839,45 @@ def overlap_freezing2(df, path, output):
     sub2Start = df['fz_start_sub2']
     sub2End = df['fz_end_sub2']
 
-    if video_system == 'FreezeFrame':
-        # FreezeFrame
-        preStartFrame = 1
-        preEndFrame = 240
-        csStartFrame = 241
-        csEndFrame = 720
-        column, row = 3, 721
-    if video_system == 'FreezeFrame_1st_half':
-        # FreezeFrame
-        preStartFrame = 1
-        preEndFrame = 240
-        csStartFrame = 241
-        csEndFrame = 480
-        column, row = 3, 721
-    if video_system == 'FreezeFrame_2nd_half':
-        # FreezeFrame
-        preStartFrame = 1
-        preEndFrame = 240
-        csStartFrame = 481
-        csEndFrame = 720
-        column, row = 3, 721
-    if video_system == 'PCBox':
-        # PCBox
-        preStartFrame = 0
-        preEndFrame = 239
-        csStartFrame = 240
-        csEndFrame = 719
-        column, row = 3, 721
-    if video_system == 'HomeCage':
-        # Generic, presumably home cage annotation
-        preStartFrame = 0
-        preEndFrame = 0
-        csStartFrame = 0
-        csEndFrame = video_total_frames - 1
-        column, row = 3, video_total_frames
+    csStartFrame, csEndFrame, startFrame, endFrame = frames_range(
+        video_system, video_total_frames)  # Get the frames range
 
-    # Create working numpy matrix of freezing (True/False) for each video frame
-    overlap = np.array([[0 for x in range(column)] for y in range(row)])
+    # Generate bit map for freezing in the range from csStartFrame to csEndFrame
+    # Initialize the bit map
+    overlap = np.array([[0 for x in range(3)] for y in range(endFrame + 1)])
 
-    # Set the overlap as 1 at freeze for each animal
     # For animal#1
+    # initialize duration of each freezing bout
     fz_sub1_bout_dur = np.zeros(len(sub1Start))
+
     for i in range(0, int(len(sub1Start))):
-        if sub1Start[i] < preStartFrame:
-            sub1Start[i] = preStartFrame
-        if sub1End[i] > csEndFrame:
-            sub1End[i] = csEndFrame
-        fz_sub1_bout_dur[i] = (sub1End[i]+1) - sub1Start[i]
-        for j in range(sub1Start[i], sub1End[i]+1):
-            overlap[j][0] = 1
+        for j in range(sub1Start[i], sub1End[i] + 1):
+            if j >= csStartFrame and j <= csEndFrame:
+                overlap[j][0] = 1
+                fz_sub1_bout_dur[i] += 1
+        # If fz_sub1_bout_dur == 0, the bout is outside of the range
+        if fz_sub1_bout_dur[i] == 0:
+            fz_sub1_bout_dur[i] = np.nan
+    # Remove bouts outside of the range
+    fz_sub1_bout_dur = fz_sub1_bout_dur[~np.isnan(fz_sub1_bout_dur)]
 
     # For animal#2
+    # initialize duration of each freezing bout
     fz_sub2_bout_dur = np.zeros(len(sub2Start))
-    for i in range(0, int(len(sub2Start))):
-        if sub2Start[i] < preStartFrame:
-            sub2Start[i] = preStartFrame
-        if sub2End[i] > csEndFrame:
-            sub2End[i] = csEndFrame
-        fz_sub2_bout_dur[i] = (sub2End[i]+1) - sub2Start[i]
-        for j in range(sub2Start[i], sub2End[i]+1):
-            overlap[j][1] = 1
 
-    # Scan the overlap valiable for freezing in animal#1 (counter[0]), animal#2 (counter[1])
-    # and overlapped freezing (counter[2])
+    for i in range(0, int(len(sub2Start))):
+        for j in range(sub2Start[i], sub2End[i] + 1):
+            if j >= csStartFrame and j <= csEndFrame:
+                overlap[j][1] = 1
+                fz_sub2_bout_dur[i] += 1
+        if fz_sub2_bout_dur[i] == 0:
+            fz_sub2_bout_dur[i] = np.nan
+    fz_sub2_bout_dur = fz_sub2_bout_dur[~np.isnan(fz_sub2_bout_dur)]
+
+    # Count each numbers
+    #   Freezing in animal#1: counter[0]
+    #   Freezing in animal#2: counter[1]
+    #   Overlapped freezing:  counter[2]
     counter = np.zeros((3), dtype=int)
 
     for i in range(csStartFrame, csEndFrame + 1):
@@ -991,16 +889,26 @@ def overlap_freezing2(df, path, output):
             overlap[i, 2] = 1
             counter[2] = counter[2] + 1
 
-    #data_range = float(csEndFrame - preEndFrame)
+    # For animal#1
     data_range = float(csEndFrame - csStartFrame + 1)
     sub1Freeze = counter[0]/data_range*100.0
-    sub2Freeze = counter[1]/data_range*100.0
-    overlapFreeze = counter[2]/data_range*100.0
-
     fz_sub1_bout_dur_ave = np.average(fz_sub1_bout_dur/4.0)
     fz_sub1_bout_n = len(fz_sub1_bout_dur)
-    fz_sub2_bout_dur_ave = np.average(fz_sub2_bout_dur/4.0)
-    fz_sub2_bout_n = len(fz_sub2_bout_dur)
+
+    # For animal#2
+    # only process animal#2 when 'single_animal' is False
+    if df['single_animal'] != True:
+        sub2Freeze = counter[1]/data_range*100.0
+        fz_sub2_bout_dur_ave = np.average(fz_sub2_bout_dur/4.0)
+        fz_sub2_bout_n = len(fz_sub2_bout_dur)
+
+        overlapFreeze = counter[2]/data_range*100.0
+    else:
+        sub2Freeze = "nan"
+        fz_sub2_bout_dur_ave = "nan"
+        fz_sub2_bout_n = "nan"
+
+        overlapFreeze = "nan"
 
     # output
     if output:
@@ -1032,126 +940,11 @@ def overlap_freezing2(df, path, output):
 
 
 ###############################################################################
-# compute_epoch_percent3()
+# (p_)compute_cohen_d()        p_ for multiprocessing
 #       read_csv2pd()
-#       overlap_freezing2()
-#       write_pd2csv()
-
-
-def compute_epoch_percent3(path, columnName, columnType, input_file='summary2.csv', output_file='summary3.csv'):
-    import warnings
-    warr_lines = []
-
-    # Read CSV into pandas DF
-    df = read_csv2pd(path, input_file, columnName, columnType)
-
-    # Compute % freezing and store in DF
-    # print("\nStep3. Computing %_epoch_time.")
-
-    # columnName = np.append(columnName, ['fz_sub1', 'fz_sub2', 'fz_overlap'])
-    # columnType = np.append(columnType, ['float', 'float', 'float'])
-
-    sub1Freeze = np.zeros(len(df))
-    sub2Freeze = np.zeros(len(df))
-    overlapFreeze = np.zeros(len(df))
-
-    fz_sub1_bout_dur_ave = np.zeros(len(df))
-    fz_sub1_bout_n = np.zeros(len(df))
-    fz_sub2_bout_dur_ave = np.zeros(len(df))
-    fz_sub2_bout_n = np.zeros(len(df))
-
-    print("\tProcessing:  ", end=" ")
-
-    for i in range(0, len(df)):
-        if i % 1000 == 0:
-            print(i, '/', len(df), end=', ')
-
-        subfolder = os.path.join(path, df.iloc[i, 0])
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-
-            try:
-                (sub1Freeze[i], sub2Freeze[i], overlapFreeze[i], overlap,
-                 fz_sub1_bout_dur_ave[i], fz_sub1_bout_n[i], fz_sub2_bout_dur_ave[i], fz_sub2_bout_n[i]) \
-                    = overlap_freezing2(df.iloc[i, :], subfolder, False)
-            except Warning:
-                print('Raised! ', '##', i,
-                      df['folder_videoname'][i], '## ', end='')
-                warr_lines = np.append(warr_lines, df['folder_videoname'][i])
-
-        if df['single_animal'][i] == 'TRUE':
-            sub2Freeze[i] = "nan"
-            overlapFreeze[i] = "nan"
-            fz_sub2_bout_dur_ave[i] = "nan"
-            fz_sub2_bout_n[i] = "nan"
-
-    # Add columns & data
-    _df = pd.DataFrame()
-    # i = 8
-    _df[columnName[-7]] = sub1Freeze
-    _df[columnName[-6]] = sub2Freeze
-    _df[columnName[-5]] = overlapFreeze
-    _df[columnName[-4]] = fz_sub1_bout_dur_ave
-    _df[columnName[-3]] = fz_sub1_bout_n
-    _df[columnName[-2]] = fz_sub2_bout_dur_ave
-    _df[columnName[-1]] = fz_sub2_bout_n
-
-    df = df.join(_df)
-
-    # Output to summary1.csv
-    print("\tWriting " + output_file + ".")
-    write_pd2csv(path, output_file, df, columnName, columnType, 1000)
-
-    return warr_lines
-
-
-###############################################################################
-# (p_)compute_cohen_d()
-#   p_ for multiprocessing
-#       read_csv2pd()
-#       permutation()
+#       (p_)permutation()
 #           overlap_freezing()
 #       write_pd2csv()
-
-
-def p_compute_cohen_d(path, columnName, columnType, start, end, input_file='summary1.csv'):
-    # Read CSV into pandas DF
-    df = read_csv2pd(path, input_file, columnName, columnType)
-
-    # Compute permutation/Cohen_D and store in DF
-    print("\tProcessing column: ", end=" ")
-    Cohen_D = np.zeros(len(df))
-
-    if end > len(df):
-        end = len(df)
-    if start >= len(df):
-        return
-
-    for i in range(start, end):
-        print("{}/{}, ".format(i, len(df)), end=" ")
-        # if i % 1000 == 0:
-        #     print("{}/{}, ".format(i, len(df)), end=" ")
-        if df['single_animal'][i] == 'TRUE' or df['fz_start_sub1'][i].size == 0 or df['fz_start_sub2'][i].size == 0:
-            # print("hit!")
-            Cohen_D[i] = "nan"
-        else:
-            subfolder = os.path.join(path, df.iloc[i, 0])
-            Cohen_D[i] = permutation(df.iloc[i, :], subfolder, False)
-    print("completed.")
-
-    # Add columns & data
-    _df = pd.DataFrame()
-    _df[columnName[-1]] = Cohen_D
-    df = df.join(_df)
-
-    # Output to summary2.csv
-    # print("\tWriting " + output_file + ".")
-    # write_pd2csv(path, output_file, df, columnName, columnType, 1000)
-
-    return df
-
-
 def compute_cohen_d(path, columnName, columnType, input_file='summary2.csv', output_file='summary3.csv'):
     # Read CSV into pandas DF
     df = read_csv2pd(path, input_file, columnName, columnType)
@@ -1161,9 +954,10 @@ def compute_cohen_d(path, columnName, columnType, input_file='summary2.csv', out
     Cohen_D = np.zeros(len(df))
 
     for i in range(0, len(df)):
-        if i % 1000 == 0:
+        if i % 10 == 0:
             print("{}/{}, ".format(i, len(df)), end=" ")
-        if df['single_animal'][i] == 'TRUE' or df['fz_start_sub1'][i].size == 0 or df['fz_start_sub2'][i].size == 0:
+
+        if df['single_animal'][i] == True or df['fz_start_sub1'][i].size == 0 or df['fz_start_sub2'][i].size == 0:
             # print("hit!")
             Cohen_D[i] = "nan"
         else:
@@ -1181,30 +975,9 @@ def compute_cohen_d(path, columnName, columnType, input_file='summary2.csv', out
     write_pd2csv(path, output_file, df, columnName, columnType, 1000)
 
 
-def p_permutation(df, path, output, id):
-    # Perform 1000 times permutation of relative timing between two mice during tone.
-    # Compute overlapped freeaing for each and statistical numbers
-
-    # Compute overlap of freezing
-    #
-    # The original videos is at 4 frame per sec (0.25s/frame)
-    # The duration is 3 min: total 720 frames
-    #     1 min for acclimation (frame 1-240: 240 frames)
-    #     2 min for CS (frame 241-720: 480 frames))
-    #
-    #     Create np.array of 721 rows x 2 columes,
-    #     representing two mice and 720 video frames (1 to 720 frame)
-    #     column 0 will be not used.
-    # PCbox generates video 0-719 frames (total 720 frames)
-    """
-    Extended to generic epoch from home cage videos
-
-    Parenthesis indicates the video frames to be compute for % epoch time
-    FreezeFrame 0,  (pre: 1 - 240), (CS: 241 - 720), 721,   Total 722 frames
-    PCBox           (pre: 0 - 239), (CS: 240 - 719),        Total 720 frames
-    HomeCage - analyze the entire frames
-                    (0 to video_total_frames - 1),          Total video_total_frames frames
-    """
+def permutation(df, path, output):
+    # Perform 1000 times permutation of relative timing between two mice during specified frames.
+    # Compute overlapped freezing for each and statistical numbers
 
     import os
     import numpy as np
@@ -1213,36 +986,12 @@ def p_permutation(df, path, output, id):
     video_system = df['video_system']
     video_total_frames = df['video_total_frames']
 
-    sub1Start = df['fz_start_sub1']
-    sub1End = df['fz_end_sub1']
-    sub2Start = df['fz_start_sub2']
-    sub2End = df['fz_end_sub2']
+    csStartFrame, csEndFrame, startFrame, endFrame = frames_range(
+        video_system, video_total_frames)  # Get the frames range
 
-    if video_system == 'FreezeFrame':
-        # FreezeFrame
-        preStartFrame = 1
-        preEndFrame = 240
-        csStartFrame = 241
-        csEndFrame = 720
-        column, row = 3, 721
-    if video_system == 'PCBox':
-        # PCBox
-        preStartFrame = 0
-        preEndFrame = 239
-        csStartFrame = 240
-        csEndFrame = 719
-        column, row = 3, 721
-    if video_system == 'HomeCage':
-        # Generic, presumably home cage annotation
-        preStartFrame = 0
-        preEndFrame = 0
-        csStartFrame = 0
-        csEndFrame = video_total_frames - 1
-        column, row = 3, video_total_frames
-
-    # Compute observed overlap
-    (_sub1Freeze, _sub2Freeze, _overlapFreeze,
-     overlap) = overlap_freezing(df, path, False)
+    # Compute observed freezing, overlap, and the freezing bit maps (overlap)
+    (_sub1Freeze, _sub2Freeze, _overlapFreeze, overlap, _fz_sub1_bout_dur_ave, _fz_sub1_bout_n, _fz_sub2_bout_dur_ave, _fz_sub2_bout_n) =\
+        overlap_freezing3(df, path, False)
 
     # Permutation. Repeat random shift of subject1 for 1000 times
     nRepeat = 1000
@@ -1259,8 +1008,10 @@ def p_permutation(df, path, output, id):
         overlap[csStartFrame:csEndFrame, 0] = np.roll(
             overlap[csStartFrame:csEndFrame, 0], shift)
 
-        # Scan the overlap valiable for freezing in animal#1 (counter[0]), animal#2 (counter[1])
-        # and overlapped freezing (counter[2])
+        # Scan the overlap variable for
+        #   freezing in animal#1 (counter[0])
+        #   freezing in animal#2 (counter[1])
+        #   overlapped freezing (counter[2])
         counter = np.zeros((3), dtype=int)
 
         for i in range(csStartFrame, csEndFrame + 1):
@@ -1274,7 +1025,7 @@ def p_permutation(df, path, output, id):
             else:
                 overlap[i, 2] = 0
 
-        data_range = float(csEndFrame - preEndFrame)
+        data_range = float(csEndFrame - csStartFrame+1)
         sub1Freeze[x] = counter[0]/data_range*100.0
         sub2Freeze[x] = counter[1]/data_range*100.0
         overlapFreeze[x] = counter[2]/data_range*100.0
@@ -1288,12 +1039,14 @@ def p_permutation(df, path, output, id):
         print("\t\t" + outputFilename)
         output = open(outputFilename, "w")
 
+        # Observed freezing and overlap
         output.write('sub1Freeze, sub2Freeze, overlapFreeze\n')
         output.write(
             str(_sub1Freeze) + ',' +
             str(_sub2Freeze) + ',' +
             str(_overlapFreeze) + '\n')
 
+        # Permuted freezing and overlap
         for i in range(0, len(sub1Freeze)):
             output.write(
                 str(sub1Freeze[i]) + ',' +
@@ -1305,10 +1058,10 @@ def p_permutation(df, path, output, id):
         print("\tObserved overlap: {} \n\tTheoretical random overlap (mean): {} (SD): {} \n\tCohen_D: {}".format(
             _overlapFreeze, np.mean(overlapFreeze), np.std(overlapFreeze), Cohen_D))
 
-    return [id, Cohen_D]
+    return(Cohen_D)
 
 
-def permutation(df, path, output):
+def permutation_org(df, path, output):
     # Perform 1000 times permutation of relative timing between two mice during tone.
     # Compute overlapped freeaing for each and statistical numbers
 
@@ -1451,7 +1204,169 @@ def permutation(df, path, output):
     return(Cohen_D)
 
 
-def permutation_org(df, video_system, path, output):
+def p_compute_cohen_d(path, columnName, columnType, start, end, input_file='summary1.csv'):
+    # Read CSV into pandas DF
+    df = read_csv2pd(path, input_file, columnName, columnType)
+
+    # Compute permutation/Cohen_D and store in DF
+    print("\tProcessing column: ", end=" ")
+    Cohen_D = np.zeros(len(df))
+
+    if end > len(df):
+        end = len(df)
+    if start >= len(df):
+        return
+
+    for i in range(start, end):
+        print("{}/{}, ".format(i, len(df)), end=" ")
+        # if i % 1000 == 0:
+        #     print("{}/{}, ".format(i, len(df)), end=" ")
+        if df['single_animal'][i] == 'TRUE' or df['fz_start_sub1'][i].size == 0 or df['fz_start_sub2'][i].size == 0:
+            # print("hit!")
+            Cohen_D[i] = "nan"
+        else:
+            subfolder = os.path.join(path, df.iloc[i, 0])
+            Cohen_D[i] = permutation(df.iloc[i, :], subfolder, False)
+    print("completed.")
+
+    # Add columns & data
+    _df = pd.DataFrame()
+    _df[columnName[-1]] = Cohen_D
+    df = df.join(_df)
+
+    # Output to summary2.csv
+    # print("\tWriting " + output_file + ".")
+    # write_pd2csv(path, output_file, df, columnName, columnType, 1000)
+
+    return df
+
+
+def p_permutation(df, path, output, id):
+    # Perform 1000 times permutation of relative timing between two mice during tone.
+    # Compute overlapped freeaing for each and statistical numbers
+
+    # Compute overlap of freezing
+    #
+    # The original videos is at 4 frame per sec (0.25s/frame)
+    # The duration is 3 min: total 720 frames
+    #     1 min for acclimation (frame 1-240: 240 frames)
+    #     2 min for CS (frame 241-720: 480 frames))
+    #
+    #     Create np.array of 721 rows x 2 columes,
+    #     representing two mice and 720 video frames (1 to 720 frame)
+    #     column 0 will be not used.
+    # PCbox generates video 0-719 frames (total 720 frames)
+    """
+    Extended to generic epoch from home cage videos
+
+    Parenthesis indicates the video frames to be compute for % epoch time
+    FreezeFrame 0,  (pre: 1 - 240), (CS: 241 - 720), 721,   Total 722 frames
+    PCBox           (pre: 0 - 239), (CS: 240 - 719),        Total 720 frames
+    HomeCage - analyze the entire frames
+                    (0 to video_total_frames - 1),          Total video_total_frames frames
+    """
+
+    import os
+    import numpy as np
+    import random
+
+    video_system = df['video_system']
+    video_total_frames = df['video_total_frames']
+
+    sub1Start = df['fz_start_sub1']
+    sub1End = df['fz_end_sub1']
+    sub2Start = df['fz_start_sub2']
+    sub2End = df['fz_end_sub2']
+
+    if video_system == 'FreezeFrame':
+        # FreezeFrame
+        preStartFrame = 1
+        preEndFrame = 240
+        csStartFrame = 241
+        csEndFrame = 720
+        column, row = 3, 721
+    if video_system == 'PCBox':
+        # PCBox
+        preStartFrame = 0
+        preEndFrame = 239
+        csStartFrame = 240
+        csEndFrame = 719
+        column, row = 3, 721
+    if video_system == 'HomeCage':
+        # Generic, presumably home cage annotation
+        preStartFrame = 0
+        preEndFrame = 0
+        csStartFrame = 0
+        csEndFrame = video_total_frames - 1
+        column, row = 3, video_total_frames
+
+    # Compute observed overlap
+    (_sub1Freeze, _sub2Freeze, _overlapFreeze,
+     overlap) = overlap_freezing(df, path, False)
+
+    # Permutation. Repeat random shift of subject1 for 1000 times
+    nRepeat = 1000
+
+    # Create working numpy array of % freezing time for each subject and % overlap
+    sub1Freeze = np.array([0.0 for x in range(nRepeat)])
+    sub2Freeze = np.array([0.0 for x in range(nRepeat)])
+    overlapFreeze = np.array([0.0 for x in range(nRepeat)])
+
+    for x in range(nRepeat):
+        # Generate random number ranged from 0 to 479
+        shift = random.randint(0, csEndFrame-csStartFrame)
+        # Shift the freezing pattern in subject1 only during frame 241-720
+        overlap[csStartFrame:csEndFrame, 0] = np.roll(
+            overlap[csStartFrame:csEndFrame, 0], shift)
+
+        # Scan the overlap valiable for freezing in animal#1 (counter[0]), animal#2 (counter[1])
+        # and overlapped freezing (counter[2])
+        counter = np.zeros((3), dtype=int)
+
+        for i in range(csStartFrame, csEndFrame + 1):
+            if overlap[i, 0] == 1:
+                counter[0] = counter[0] + 1
+            if overlap[i, 1] == 1:
+                counter[1] = counter[1] + 1
+            if overlap[i, 0] == 1 and overlap[i, 1] == 1:
+                overlap[i, 2] = 1
+                counter[2] = counter[2] + 1
+            else:
+                overlap[i, 2] = 0
+
+        data_range = float(csEndFrame - preEndFrame)
+        sub1Freeze[x] = counter[0]/data_range*100.0
+        sub2Freeze[x] = counter[1]/data_range*100.0
+        overlapFreeze[x] = counter[2]/data_range*100.0
+
+    Cohen_D = (_overlapFreeze - np.mean(overlapFreeze)) / np.std(overlapFreeze)
+
+    # Output to permutation.csv
+    if output:
+        print("\tWriting permutation.csv.")
+        outputFilename = os.path.join(path, "_permutation.csv")
+        print("\t\t" + outputFilename)
+        output = open(outputFilename, "w")
+
+        output.write('sub1Freeze, sub2Freeze, overlapFreeze\n')
+        output.write(
+            str(_sub1Freeze) + ',' +
+            str(_sub2Freeze) + ',' +
+            str(_overlapFreeze) + '\n')
+
+        for i in range(0, len(sub1Freeze)):
+            output.write(
+                str(sub1Freeze[i]) + ',' +
+                str(sub2Freeze[i]) + ',' +
+                str(overlapFreeze[i]) + ',' +
+                'Permutation' + '\n')
+        output.close()
+
+        print("\tObserved overlap: {} \n\tTheoretical random overlap (mean): {} (SD): {} \n\tCohen_D: {}".format(
+            _overlapFreeze, np.mean(overlapFreeze), np.std(overlapFreeze), Cohen_D))
+
+    return [id, Cohen_D]
+
     # Perform 1000 times permutation of relative timing between two mice during tone.
     # Compute overlapped freeaing for each and statistical numbers
 
@@ -1668,7 +1583,8 @@ def compute_markov_chain(path, columnName, columnType, input_file='summary3.csv'
 
     # Main loop
     for i in range(0, len(df)):
-        print("{}/{}, ".format(i, len(df)), end=" ")
+        if i % 10 == 0:
+            print("{}/{}, ".format(i, len(df)), end=" ")
 
         # If single animal, do nothing.
         if df['single_animal'][i] == 'TRUE' or df['fz_start_sub1'][i].size == 0 or df['fz_start_sub2'][i].size == 0:
@@ -1702,6 +1618,128 @@ def compute_markov_chain(path, columnName, columnType, input_file='summary3.csv'
 
 
 def state_trans(df, video_system, state_trans_tp, DEBUG=False):
+    import numpy as np
+    import pandas as pd
+
+    video_system = df['video_system']
+    video_total_frames = df['video_total_frames']
+
+    sub1Start = df['fz_start_sub1']
+    sub1End = df['fz_end_sub1']
+    sub2Start = df['fz_start_sub2']
+    sub2End = df['fz_end_sub2']
+
+    csStartFrame, csEndFrame, startFrame, endFrame = frames_range(
+        video_system, video_total_frames)  # Get the frames range
+
+    #################################################
+    # Generate pandas dataframe for freezing states
+    #    (bools) 'sub1_freeze', 'sub2_freeze', 'other' for each video frame
+    #################################################
+    # Create working numpy matrix of freezing (True/False) for the pandas dataframe
+    # All values are False
+    sub_freeze = np.zeros((endFrame + 1, 3), dtype=bool)
+
+    # For animal#1
+    for i in range(0, int(len(sub1Start))):
+        for j in range(sub1Start[i], sub1End[i] + 1):
+            if j >= csStartFrame and j <= csEndFrame:
+                sub_freeze[j][0] = True
+
+    # For animal#2
+    for i in range(0, int(len(sub2Start))):
+        for j in range(sub2Start[i], sub2End[i] + 1):
+            if j >= csStartFrame and j <= csEndFrame:
+                sub_freeze[j][1] = True
+
+    # Initialize the pandas DataFrame
+    _df = pd.DataFrame(data=sub_freeze, columns=[
+                       'sub1_freeze', 'sub2_freeze', 'other'], dtype=bool)
+    #################################################
+    # Identify and count each behavior states
+    #     state  sub1    sub2
+    #     0      freeze  freeze
+    #     1      freeze  no
+    #     2      no      freeze
+    #     3      no      no
+    #################################################
+    state = np.zeros(len(_df), dtype=int)
+    state_count = np.zeros(4, dtype=int)
+
+    for i in range(0, len(_df)):
+        if _df['sub1_freeze'][i] == True and _df['sub2_freeze'][i] == True:
+            state[i] = 0
+            if i >= csStartFrame and i <= csEndFrame:
+                state_count[0] += 1
+        elif _df['sub1_freeze'][i] == True and _df['sub2_freeze'][i] == False:
+            state[i] = 1
+            if i >= csStartFrame and i <= csEndFrame:
+                state_count[1] += 1
+        elif _df['sub1_freeze'][i] == False and _df['sub2_freeze'][i] == True:
+            state[i] = 2
+            if i >= csStartFrame and i <= csEndFrame:
+                state_count[2] += 1
+        elif _df['sub1_freeze'][i] == False and _df['sub2_freeze'][i] == False:
+            state[i] = 3
+            if i >= csStartFrame and i <= csEndFrame:
+                state_count[3] += 1
+
+    # merge the states into the _df as state column
+    # _df: (bools) 'sub1_freeze', 'sub2_freeze', 'other', (int) state
+    # store the results to _df2 temporarily
+    _df2 = pd.DataFrame()
+    _df2['state'] = state
+    _df = _df.join(_df2)
+
+    #################################################
+    # Create dataframe of the From state and To state
+    #    Because it's transition, the total number of row decreases by 1
+    #################################################
+    _df2 = pd.DataFrame()
+    _df2['From'] = []
+    _df2['To'] = []
+    _df2 = _df2.astype(int)
+
+    # Because it's transition, the total number of row decreases by 1
+    for i in range(0, len(_df)-1):
+        new_row = {'From': _df['state'][i], 'To': _df['state'][i+1]}
+        # Need to wrap in a list to avoid an error
+        new_row = pd.DataFrame([new_row])
+        # 20220331 wi: switch from pd.append to pd.concat
+        _df2 = pd.concat([_df2, new_row], ignore_index=True)
+
+    #################################################
+    # Using the _df2, identify and count each transition from the 16 patterns
+    #   during CS (either 241-720 or 240-719). Frame number
+    #   is 480, but the number of states is 479)
+    #################################################
+    pattern = [[0, 0], [0, 1], [0, 2], [0, 3],
+               [1, 0], [1, 1], [1, 2], [1, 3],
+               [2, 0], [2, 1], [2, 2], [2, 3],
+               [3, 0], [3, 1], [3, 2], [3, 3]]
+    state_trans_count = np.zeros(16, dtype=int)
+
+    for i in range(csStartFrame, csEndFrame):
+        for j in range(len(pattern)):
+            if _df2['From'][i] == pattern[j][0] and _df2['To'][i] == pattern[j][1]:
+                state_trans_count[j] += 1
+
+    #################################################
+    # Concatenate dataframe of ID, From, To, frame_n
+    #################################################
+    for i in range(csStartFrame, csEndFrame):
+        if _df2['From'][i] != _df2['To'][i]:
+            new_row = {'ID': df['folder_videoname'],
+                       'From': _df2['From'][i], 'To': _df2['To'][i], 'frame_n': i}
+            new_row = pd.DataFrame([new_row])
+            # state_trans_tp = state_trans_tp.append(new_row, ignore_index=True)
+            state_trans_tp = pd.concat(
+                [state_trans_tp, new_row], ignore_index=True)
+
+    return(state_count, state_trans_count, state_trans_tp)
+
+
+def state_trans_org(df, video_system, state_trans_tp, DEBUG=False):
     import numpy as np
     import pandas as pd
 
@@ -1866,12 +1904,13 @@ def state_trans(df, video_system, state_trans_tp, DEBUG=False):
 
     return(state_count, state_trans_count, state_trans_tp)
 
-
 ###############################################################################
 # compute_distance()
 #       read_csv2pd()
 #       distance_cs()
 #       write_pd2csv()
+
+
 def compute_distance():
     # Read CSV into pandas DF
     df = read_csv2pd(path, 'summary4.csv', columnName, columnType)
