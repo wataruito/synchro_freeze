@@ -49,7 +49,7 @@ Keyboard controls:
 """
 
 
-def video_cursor(video, mag_factor=3, mag_factor_ratio_current_prev=1.0):
+def video_cursor(video, mag_factor=3, pre_mag_factor=3):
     global x1, y1, x2, y2, drag, sub, click, mode, pixel_limit
 
     ###################################
@@ -153,8 +153,8 @@ def video_cursor(video, mag_factor=3, mag_factor_ratio_current_prev=1.0):
         # xy1, xy2, freeze = read_trajectory(video)
         width, halfDep, L1, L2, L4, xy1, xy2, freeze = read_traj(video)
         # Adjust xy1, xy2 to the current video
-        xy1 = (xy1 * mag_factor_ratio_current_prev).astype(int)
-        xy2 = (xy2 * mag_factor_ratio_current_prev).astype(int)
+        xy1 = (xy1 * mag_factor / pre_mag_factor).astype(int)
+        xy2 = (xy2 * mag_factor / pre_mag_factor).astype(int)
 
     else:
         width = 295.0
