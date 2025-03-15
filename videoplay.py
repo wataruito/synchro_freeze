@@ -10,6 +10,8 @@
                    ord('A'): 'prev_frame_jump', ord('D'): 'next_frame_jump',
                    ord('~'): 'set_jump',
     command '~' will request new frame_jump nubmers
+
+2025/03/14 wi Bug fix
 """
 
 
